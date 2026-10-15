@@ -23,6 +23,7 @@ fun MainMenu() {
     val ctx = LocalContext.current
     val scope = App.scope
     var hasSave by remember { mutableStateOf(Persistence.exists(ctx.filesDir)) }
+    var hasBackup by remember { mutableStateOf(!Persistence.exists(ctx.filesDir) && Persistence.hasBackup(ctx.filesDir)) }
     var loadMessage by remember { mutableStateOf<String?>(null) }
     Row(Modifier.fillMaxSize().padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -34,6 +35,14 @@ fun MainMenu() {
         }
         Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Btn("New Career", modifier = Modifier.fillMaxWidth()) { App.mode = Mode.NEWGAME }
+            if (hasBackup) {
+                Btn("Restore last backup", modifier = Modifier.fillMaxWidth()) {
+                    val restored = Persistence.restoreBackup(ctx.filesDir)
+                    hasSave = restored && Persistence.exists(ctx.filesDir)
+                    hasBackup = !hasSave && Persistence.hasBackup(ctx.filesDir)
+                    loadMessage = if (restored) "Last backup restored. Choose Continue Career to load it." else "Couldn't restore the last backup, try again."
+                }
+            }
             Btn("Continue Career", enabled = hasSave, modifier = Modifier.fillMaxWidth()) {
                 scope.launch {
                     val result = heavy("Loading career...") { Persistence.load(ctx.filesDir) }
@@ -45,17 +54,24 @@ fun MainMenu() {
                         }
                         LoadResult.NoSave -> {
                             hasSave = false
+                            hasBackup = Persistence.hasBackup(ctx.filesDir)
                             loadMessage = "No saved career was found. You can start a new career."
                         }
                         is LoadResult.Incompatible -> {
                             hasSave = Persistence.exists(ctx.filesDir)
+                            hasBackup = !hasSave && Persistence.hasBackup(ctx.filesDir)
                             val backup = result.backupFileName?.let { " Preserved as $it." }.orEmpty()
                             loadMessage = "This career save is incompatible with this version of Nerd FM. It was not loaded.$backup ${result.reason}"
                         }
                         is LoadResult.Corrupt -> {
                             hasSave = Persistence.exists(ctx.filesDir)
+                            hasBackup = !hasSave && Persistence.hasBackup(ctx.filesDir)
                             val backup = result.backupFileName?.let { " Preserved as $it." }.orEmpty()
                             loadMessage = "This career save is damaged and could not be loaded.$backup ${result.reason}"
+                        }
+                        is LoadResult.ReadError -> {
+                            hasSave = Persistence.exists(ctx.filesDir)
+                            loadMessage = "couldn't read the save, try again. ${result.reason}"
                         }
                     }
                 }

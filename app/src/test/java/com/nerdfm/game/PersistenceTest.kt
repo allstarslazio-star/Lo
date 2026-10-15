@@ -202,6 +202,49 @@ class PersistenceTest {
     }
 
 
+
+    @Test fun unexpectedReadErrorLeavesOriginalSaveUntouched() {
+        val directory = temp.newFolder("non-destructive-read-error")
+        val file = File(directory, "career1.dat")
+        // A directory at the save path causes a non-corruption I/O failure on normal file systems.
+        assertTrue(file.mkdir())
+        val result = Persistence.load(directory)
+        assertTrue(result is LoadResult.ReadError)
+        assertTrue("original path must remain untouched", file.isDirectory)
+        assertFalse(File(directory, "career1.failed-load.bak").exists())
+    }
+
+    @Test fun backupIsOfferedAndCanBeRestoredWithoutCurrentSave() {
+        val directory = temp.newFolder("restore-backup")
+        assertTrue(Persistence.save(directory, World().apply { year = 2044 }))
+        assertTrue(Persistence.delete(directory))
+        assertFalse(Persistence.exists(directory))
+        assertTrue(Persistence.hasBackup(directory))
+        assertTrue(Persistence.restoreBackup(directory))
+        assertTrue(Persistence.exists(directory))
+        assertEquals(2044, ((Persistence.load(directory)) as LoadResult.Loaded).world.year)
+    }
+
+    @Test fun deletingAnUnreadableFileArchivesItWithoutDeserializing() {
+        val directory = temp.newFolder("delete-unreadable")
+        val current = File(directory, "career1.dat")
+        current.writeBytes(byteArrayOf(1, 2, 3, 4))
+        val original = current.readBytes()
+        assertTrue(Persistence.delete(directory))
+        assertFalse(current.exists())
+        assertTrue(File(directory, "career1.bak").readBytes().contentEquals(original))
+    }
+
+    @Test fun deletingArchivesByRenameAndMeasuresWholeSaveSeparately() {
+        val directory = temp.newFolder("archive-timing")
+        assertTrue(Persistence.save(directory, WorldGen.generate(887766L, "Timing", 0)))
+        assertTrue("whole save timer should be populated", Persistence.lastSaveNanos > 0L)
+        assertTrue("verification timer should remain separately populated", Persistence.lastReadBackVerificationNanos > 0L)
+        assertTrue(Persistence.delete(directory))
+        assertTrue(File(directory, "career1.bak").isFile)
+        assertFalse(Persistence.exists(directory))
+    }
+
     private fun writeWorldWithWrongSerialUid(file: File, world: World) {
         val raw = ByteArrayOutputStream().also { bytes ->
             ObjectOutputStream(bytes).use { it.writeObject(world) }

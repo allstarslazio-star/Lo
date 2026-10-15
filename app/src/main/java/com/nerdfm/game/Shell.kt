@@ -377,6 +377,12 @@ fun SackedScreen(w: World) {
                 }
             }
         }
-        Btn("Retire to the main menu") { App.mode = Mode.MENU; App.world = null; Persistence.delete(ctx.filesDir) }
+        Btn("Retire to the main menu") {
+            scope.launch {
+                withContext(Dispatchers.IO) { Persistence.delete(ctx.filesDir) }
+                App.mode = Mode.MENU
+                App.world = null
+            }
+        }
     }
 }

@@ -18,6 +18,7 @@ sealed class LoadResult {
     object NoSave : LoadResult()
     data class Incompatible(val reason: String, val backupFileName: String? = null) : LoadResult()
     data class Corrupt(val reason: String, val backupFileName: String? = null) : LoadResult()
+    data class ReadError(val reason: String) : LoadResult()
 }
 
 /** File-based by design so persistence can be exercised by local JVM unit tests. */
@@ -27,6 +28,12 @@ object Persistence {
     private const val TEMP_NAME = "career1.tmp"
     private const val BACKUP_NAME = "career1.bak"
     private const val FAILED_BACKUP_NAME = "career1.failed-load.bak"
+    private val writtenSavePaths = HashSet<String>()
+
+    /** Duration of the most recent complete save operation, including verification and promotion. */
+    @Volatile
+    var lastSaveNanos: Long = 0L
+        private set
 
     /** Duration of the most recent temporary-save read-back verification. */
     @Volatile
@@ -42,6 +49,7 @@ object Persistence {
      */
     @Synchronized
     fun save(directory: File, world: World): Boolean {
+        val saveStart = System.nanoTime()
         val temp = File(directory, TEMP_NAME)
         return try {
             if (!directory.exists() && !directory.mkdirs()) return false
@@ -62,11 +70,13 @@ object Persistence {
             val current = saveFile(directory)
             if (current.exists() && !archiveBeforeOverwrite(directory, current)) return false
             if (!temp.renameTo(current)) return false
+            writtenSavePaths.add(current.absolutePath)
             true
         } catch (_: Exception) {
             false
         } finally {
             if (temp.exists()) temp.delete()
+            lastSaveNanos = System.nanoTime() - saveStart
         }
     }
 
@@ -76,7 +86,8 @@ object Persistence {
         if (!file.exists()) return LoadResult.NoSave
 
         val result = readFile(file)
-        if (result !is LoadResult.Loaded) {
+        if (result is LoadResult.Incompatible || result is LoadResult.Corrupt) {
+            writtenSavePaths.remove(file.absolutePath)
             val backupName = moveFailedLoadSave(directory, file)
             return when (result) {
                 is LoadResult.Incompatible -> result.copy(backupFileName = backupName ?: result.backupFileName)
@@ -92,7 +103,20 @@ object Persistence {
     fun delete(directory: File): Boolean {
         val file = saveFile(directory)
         if (!file.exists()) return true
-        return archiveBeforeOverwrite(directory, file)
+        // Retiring a career is an archive operation, not a read/deserialize operation.
+        val archived = moveToLastGoodBackup(directory, file)
+        if (archived) writtenSavePaths.remove(file.absolutePath)
+        return archived
+    }
+
+    fun hasBackup(directory: File): Boolean = File(directory, BACKUP_NAME).isFile
+
+    @Synchronized
+    fun restoreBackup(directory: File): Boolean {
+        val current = saveFile(directory)
+        val backup = File(directory, BACKUP_NAME)
+        if (current.exists() || !backup.isFile) return false
+        return backup.renameTo(current)
     }
 
     private fun readFile(file: File): LoadResult {
@@ -121,7 +145,7 @@ object Persistence {
         } catch (e: StreamCorruptedException) {
             LoadResult.Corrupt("The save's object stream is corrupted: ${e.message ?: "invalid object stream"}.")
         } catch (e: Exception) {
-            LoadResult.Corrupt("The save could not be read: ${e.message ?: e.javaClass.simpleName}.")
+            LoadResult.ReadError("The save could not be read: ${e.message ?: e.javaClass.simpleName}.")
         }
     }
 
@@ -138,6 +162,12 @@ object Persistence {
     }
 
     private fun archiveBeforeOverwrite(directory: File, current: File): Boolean {
+        // A save this process just wrote was already read-back verified; don't deserialize it again.
+        if (current.absolutePath in writtenSavePaths) {
+            val archived = moveGoodSaveToLastGoodBackup(directory, current)
+            if (archived) writtenSavePaths.remove(current.absolutePath)
+            return archived
+        }
         val existingResult = readFile(current)
         return if (existingResult is LoadResult.Loaded) {
             moveGoodSaveToLastGoodBackup(directory, current)
@@ -147,7 +177,11 @@ object Persistence {
     }
 
     /** Move the current known-good save to career1.bak without risking the only copy. */
-    private fun moveGoodSaveToLastGoodBackup(directory: File, current: File): Boolean {
+    private fun moveGoodSaveToLastGoodBackup(directory: File, current: File): Boolean =
+        moveToLastGoodBackup(directory, current)
+
+    /** Promote a save to the backup using rename only; never deserialize it during archival. */
+    private fun moveToLastGoodBackup(directory: File, current: File): Boolean {
         val pending = uniqueFile(directory, "career1.backup-pending", ".tmp")
         if (!current.renameTo(pending)) return false
         val backup = File(directory, BACKUP_NAME)
@@ -156,7 +190,6 @@ object Persistence {
             return false
         }
         if (pending.renameTo(backup)) return true
-        // If promotion fails, put the save back when possible; pending remains a recovery copy otherwise.
         pending.renameTo(current)
         return false
     }
