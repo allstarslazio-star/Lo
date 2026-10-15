@@ -183,11 +183,7 @@ object Game {
             c.weeklyIncome += base
             c.weeklyExpense = wages + upkeep
         }
-        // Calendar-based transfer-window reminders; weekly fixtures remain unchanged.
-        if (w.isWindowOpen() && w.windowDaysRemaining() in 1..7 &&
-            w.news.none { it.title == "Transfer deadline approaching" && it.year == w.year && it.week == w.week }) {
-            w.addNews("Transfer deadline approaching", "${w.windowText()}. Finalise outstanding deals before the window closes.")
-        }
+        windowNews(w)
         // offers
         w.offers.removeAll { it.expiresWeek < w.week || w.players[it.playerId]?.clubId != w.humanClubId }
         scoutingTick(w, rnd)
@@ -230,6 +226,29 @@ object Game {
             endSeason(w, rnd)
         } else {
             w.week++
+        }
+        w.dayInWeek = 0
+    }
+
+    /** Step one calendar day inside the current week (no fixtures are played). */
+    fun advanceDay(w: World) {
+        if (w.dayInWeek < 6) w.dayInWeek++
+        windowNews(w)
+    }
+
+    /** Transfer-window reminders, once per title/year/week. */
+    fun windowNews(w: World) {
+        if (!w.isWindowOpen()) return
+        val left = w.windowDaysRemaining()
+        val title = when {
+            left == 0 -> "Transfer deadline day"
+            left in 1..7 -> "Transfer deadline approaching"
+            else -> return
+        }
+        if (w.news.none { it.title == title && it.year == w.year && it.week == w.week }) {
+            val body = if (left == 0) "Today is the last day of the window. Finalise outstanding deals now."
+                       else "${w.windowText()}. Finalise outstanding deals before the window closes."
+            w.addNews(title, body)
         }
     }
 

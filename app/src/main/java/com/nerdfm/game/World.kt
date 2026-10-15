@@ -8,6 +8,8 @@ class World : Serializable {
     var seed = 0L
     var year = 2026
     var week = 0
+    /** Day within the current week, 0..6. Old saves load with 0. */
+    var dayInWeek = 0
     var humanClubId = 0
     var manager = "Manager"
     val players = HashMap<Int, Player>()
@@ -69,9 +71,9 @@ class World : Serializable {
         return date.format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy"))
     }
 
-    /** Calendar date follows the existing weekly fixture cadence (week zero starts 1 July). */
+    /** Week zero starts 1 July; each week is 7 days and the manager can step through them one day at a time. */
     fun careerDate(): java.time.LocalDate = java.time.LocalDate.of(year, 7, 1)
-        .plusDays(week.coerceAtLeast(0) * 7L)
+        .plusDays(week.coerceAtLeast(0) * 7L + dayInWeek.coerceIn(0, 6))
 
     fun isWindowOpen(): Boolean {
         val date = careerDate()

@@ -75,6 +75,12 @@ fun GameShell(w: World, tick: Int) {
             }
             Btn("Menu") { menu = true }
             Spacer(Modifier.width(8.dp))
+            Btn("Next day", enabled = w.dayInWeek < 6) {
+                Game.advanceDay(w)
+                App.bump()
+                scope.launch { withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) } }
+            }
+            Spacer(Modifier.width(8.dp))
             val label = if (fx != null) {
                 val home = fx.home == me.id
                 (if (home) "Play (H) vs " else "Play (A) vs ") + w.clubs[if (home) fx.away else fx.home].name

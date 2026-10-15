@@ -57,3 +57,10 @@
 - **Counter-tactic drift (Phase 10):** the bias against the human's most-used tactics was written into stored AI genomes every season, so it compounded (mean AI pressing gene reached ~1.9/2.0 after ~15 seasons against a low-pressing human, ~0.1 against a high-pressing one). It is now applied only to the tactics actually played. Regression test `CounterTacticDriftTest` fails on the old code (1.92) and passes now. **Verified offline (JVM).**
 - **Bench display (Phase 8):** substitution bench shows OVR and match rating again; unused substitutes all start at a default 6.0 rating, so rating alone hid the information needed to choose a sub. **Compose UI change: NOT VERIFIED (not compiled).**
 - **Signing bonus (Phase 6):** the bonus is now checked against the balance remaining after the transfer fee. **NOT VERIFIED by a dedicated test.**
+
+## Post-phase-10 fixes (calendar, profiles, CI, size)
+
+- CI runner pinned to `ubuntu-24.04`.
+- Release build now uses R8 minification and resource shrinking (own classes kept because saves use Java serialization) and CI uploads `NerdFM-release-apk`. **NOT VERIFIED: needs a CI run, and a save made by a debug build must still load on the release build.**
+- Player profile opens from any screen: tap a name where it is only displayed, long-press rows that already have a tap action (lineup, bench, reserves, training, substitution dialog). View-only during a match. **Compose code NOT VERIFIED (CI only).**
+- Day-by-day calendar: `World.dayInWeek` (0..6, old saves load as 0), "Next day" button, day-accurate transfer windows, deadline-day news. Continue/Play still jumps to matchday. **Logic covered by `WorldCalendarTest`; UI NOT VERIFIED.**
