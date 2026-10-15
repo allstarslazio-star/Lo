@@ -274,17 +274,23 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
             val renew = step == "renew"
             val wanted = if (renew) p.wageDemand() else Transfers.wantedWage(me, p)
             var wageText by remember { mutableStateOf(wanted.toString()) }
+            var bonusText by remember { mutableStateOf("0") }
             var years by remember { mutableIntStateOf(3) }
             AlertDialog(
                 onDismissRequest = { step = "view" },
                 title = { Text(if (renew) "New contract: ${p.name}" else "Contract terms: ${p.name}") },
                 text = {
                     Column {
-                        if (!renew) T(if (Transfers.willJoin(me, p)) "Player interest: Interested in joining your club." else "Player interest: Unlikely to join at your current reputation.", 12, if (Transfers.willJoin(me, p)) C.green else C.red, lines = 2)
+                        if (!renew) T("Player interest: ${Transfers.interestLabel(me, p)}. ${Transfers.interestReason(me, p)}", 12, if (Transfers.willJoin(me, p)) C.green else C.red, lines = 3)
                         T("Expected wage about ${money(wanted.toLong())} / week", 12, C.muted)
                         OutlinedTextField(
                             value = wageText, onValueChange = { wageText = it.filter { c -> c.isDigit() }.take(7) },
                             singleLine = true, label = { Text("Weekly wage") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                        OutlinedTextField(
+                            value = bonusText, onValueChange = { bonusText = it.filter(Char::isDigit).take(10) },
+                            singleLine = true, label = { Text("One-off signing bonus") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
                         Spacer(Modifier.height(6.dp))
@@ -295,7 +301,8 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
                 confirmButton = {
                     Btn(if (renew) "Offer deal" else "Sign player") {
                         val wage = wageText.toIntOrNull() ?: 0
-                        val r = if (renew) Transfers.renew(w, p, wage, years) else Transfers.completeSigning(w, p, fee, wage, years)
+                        val bonus = bonusText.toLongOrNull() ?: 0L
+                        val r = if (renew) Transfers.renew(w, p, wage, years, bonus) else Transfers.completeSigning(w, p, fee, wage, years, bonus)
                         if (r.first) { step = "view"; onChanged(); if (!renew) onClose() } else msg = r.second
                     }
                 },

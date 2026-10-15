@@ -20,6 +20,18 @@ object Transfers {
 
     fun willJoin(me: Club, p: Player): Boolean = requiredRep(p) - me.rep <= 25
 
+    fun interestLabel(me: Club, p: Player): String = when {
+        requiredRep(p) - me.rep <= 0 -> "Interested"
+        requiredRep(p) - me.rep <= 25 -> "Undecided"
+        else -> "Not interested"
+    }
+
+    fun interestReason(me: Club, p: Player): String = when (interestLabel(me, p)) {
+        "Interested" -> "Your club's reputation meets the player's expectations."
+        "Undecided" -> "The player may need a stronger contract to consider joining."
+        else -> "The player expects a club with a much higher reputation."
+    }
+
     fun askingPrice(w: World, p: Player, buyer: Club): Long {
         val seller = w.clubs[p.clubId]
         val squad = w.squad(seller).sortedByDescending { it.ovr }
@@ -68,29 +80,33 @@ object Transfers {
     }
 
     /** Human finalises a purchase with personal terms. Returns message and whether it worked. */
-    fun completeSigning(w: World, p: Player, fee: Long, wage: Int, years: Int): Pair<Boolean, String> {
+    fun completeSigning(w: World, p: Player, fee: Long, wage: Int, years: Int, signingBonus: Long = 0L): Pair<Boolean, String> {
         val me = w.human()
         if (!willJoin(me, p)) return false to "${p.name} is not interested in joining a club of your stature."
         val wanted = wantedWage(me, p)
         if (wage < wanted) return false to "${p.name} wants at least ${money(wanted.toLong())} per week."
+        if (signingBonus < 0L || (signingBonus > 0L && signingBonus > me.balance)) return false to "The club cannot afford that signing bonus."
         val newBill = w.wageBill(me) + wage
         if (newBill > me.wageBudget) return false to "The board will not sanction this - it would break the wage budget (${money(me.wageBudget)}/wk)."
         if (me.players.size >= 40) return false to "Your squad is full (40 players)."
         val rnd = w.rng(p.id)
         val from = if (p.clubId >= 0) w.clubs[p.clubId].name else "free agency"
         move(w, p, me, fee, wage, years, rnd)
-        w.addNews("Signing complete", "${p.name} (${p.pos.label}, ${p.ovr}) joins from $from for ${if (fee > 0) money(fee) else "free"}.")
+        me.balance -= signingBonus
+        w.addNews("Signing complete", "${p.name} (${p.pos.label}, ${p.ovr}) joins from $from for ${if (fee > 0) money(fee) else "free"}, with a ${money(signingBonus)} signing bonus.")
         return true to "${p.name} has signed for ${me.name}!"
     }
 
-    fun renew(w: World, p: Player, wage: Int, years: Int): Pair<Boolean, String> {
+    fun renew(w: World, p: Player, wage: Int, years: Int, signingBonus: Long = 0L): Pair<Boolean, String> {
         val me = w.human()
         var wanted = (p.wageDemand() * 1.0).toInt()
         if (p.morale < 45f) wanted = (wanted * 1.3).toInt()
         if (p.age >= 33) wanted = (wanted * 0.8).toInt()
         if (wage < wanted) return false to "${p.name} wants at least ${money(wanted.toLong())} per week."
+        if (signingBonus < 0L || (signingBonus > 0L && signingBonus > me.balance)) return false to "The club cannot afford that bonus."
         val newBill = w.wageBill(me) - p.wage + wage
         if (newBill > me.wageBudget) return false to "The board will not sanction this - it breaks the wage budget."
+        me.balance -= signingBonus
         p.wage = wage
         p.contractEnd = w.year + years
         p.morale = min(100f, p.morale + 8f)
