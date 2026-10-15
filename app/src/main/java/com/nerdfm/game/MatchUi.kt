@@ -182,7 +182,7 @@ fun MatchScreen(w: World) {
                         for (ps in mine.bench) {
                             Box(Modifier.fillMaxWidth().background(if (inSel === ps) C.accent.copy(alpha = 0.3f) else Color.Transparent)
                                 .clickable { inSel = ps }.padding(4.dp)) {
-                                T("${ps.p.pos.label} ${ps.p.name} · ${"%.1f".format(ps.rating.coerceIn(3f, 10f))}", 12)
+                                T("${ps.p.pos.label} ${ps.p.name} (${ps.p.ovr}) · ${"%.1f".format(ps.rating.coerceIn(3f, 10f))}", 12)
                             }
                         }
                     }

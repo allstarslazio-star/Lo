@@ -85,7 +85,7 @@ object Transfers {
         if (!willJoin(me, p)) return false to "${p.name} is not interested in joining a club of your stature."
         val wanted = wantedWage(me, p)
         if (wage < wanted) return false to "${p.name} wants at least ${money(wanted.toLong())} per week."
-        if (signingBonus < 0L || (signingBonus > 0L && signingBonus > me.balance)) return false to "The club cannot afford that signing bonus."
+        if (signingBonus < 0L || (signingBonus > 0L && signingBonus > me.balance - fee)) return false to "The club cannot afford that signing bonus on top of the transfer fee."
         val newBill = w.wageBill(me) + wage
         if (newBill > me.wageBudget) return false to "The board will not sanction this - it would break the wage budget (${money(me.wageBudget)}/wk)."
         if (me.players.size >= 40) return false to "Your squad is full (40 players)."

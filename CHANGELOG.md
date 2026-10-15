@@ -51,3 +51,9 @@
 ## Final review / verification status
 
 - Reviewed the six phase commits and checked the complete diff for whitespace errors. **NOT VERIFIED:** Gradle/JUnit/Android compilation and runtime simulation were not run, as instructed. No claims are made about Kotlin/Compose compilation, unit-test results, APK assembly, match calibration, or full 200-season gameplay.
+
+## Post-review fixes (phases 5-10)
+
+- **Counter-tactic drift (Phase 10):** the bias against the human's most-used tactics was written into stored AI genomes every season, so it compounded (mean AI pressing gene reached ~1.9/2.0 after ~15 seasons against a low-pressing human, ~0.1 against a high-pressing one). It is now applied only to the tactics actually played. Regression test `CounterTacticDriftTest` fails on the old code (1.92) and passes now. **Verified offline (JVM).**
+- **Bench display (Phase 8):** substitution bench shows OVR and match rating again; unused substitutes all start at a default 6.0 rating, so rating alone hid the information needed to choose a sub. **Compose UI change: NOT VERIFIED (not compiled).**
+- **Signing bonus (Phase 6):** the bonus is now checked against the balance remaining after the transfer fee. **NOT VERIFIED by a dedicated test.**
