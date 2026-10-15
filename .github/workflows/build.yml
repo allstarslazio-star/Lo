@@ -13,8 +13,15 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
       - name: Run unit tests and build debug APK
-        run: ./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
+        run: gradle testDebugUnitTest assembleDebug --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: NerdFM-test-report
+          path: app/build/reports/tests
       - uses: actions/upload-artifact@v4
         with:
           name: NerdFM-debug-apk
