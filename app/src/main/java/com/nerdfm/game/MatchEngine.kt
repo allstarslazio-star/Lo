@@ -688,7 +688,11 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
     /** Defender team wins the ball. [z] is the zone from the winner's point of view. */
     private fun winBall(winner: MatchTeam, wi: Int, z: Int, pFast: Float, loser: MatchTeam) {
         val dp = pickBy(winner.onPitch) { ps -> W.MIDDEF[ps.slot.ordinal] * (0.3f + ps.dfnAb / 60f) + 0.1f }
+        var pressAction = PlayerAction.PRESS
+        var pressState = 0
         if (dp != null) {
+            pressState = PlayerLearningState.encode(zone, dp.cond, loser.pressP, winner.goals - loser.goals)
+            pressAction = dp.p.learning.choose(pressState, 0.04f, rnd, listOf(PlayerAction.PRESS, PlayerAction.HOLD))
             dp.tackles++
             winner.tackles++
             if (rf() < 0.5f) { dp.interceptions++; rate(dp, 0.05f) } else rate(dp, 0.07f)
@@ -698,9 +702,12 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
         if (z >= 1) {
             val pc = pFast + 0.08f * loser.eMent + 0.05f * (loser.eLine - 1) + (if (winner.ePass == 2) 0.06f else 0f) +
                 (if (winner.pace > 62f) 0.03f else 0f)
-            if (rf() < clampF(pc, 0.03f, 0.7f)) { zz = 2; fast = true }
+            val pressingAdjustment = if (pressAction == PlayerAction.PRESS) 0.035f else -0.025f
+            if (rf() < clampF(pc + pressingAdjustment, 0.03f, 0.7f)) { zz = 2; fast = true }
         }
         if (z == 2) fast = fast || rf() < 0.5f
+        if (dp != null) dp.p.learning.update(pressState, pressAction, if (fast) 0.25f else -0.08f,
+            PlayerLearningState.encode(zz, dp.cond, loser.pressP, winner.goals - loser.goals))
         turnover(wi, zz, fast)
     }
 
@@ -971,9 +978,14 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
                 turnover(di, 0, false)
                 return
             }
+            shooter.p.learning.update(PlayerLearningState.encode(zone, shooter.cond, def.pressP, att.goals - def.goals), PlayerAction.SHOOT,
+                (1f - xg).coerceIn(-1f, 1f), PlayerLearningState.encode(zone, shooter.cond, def.pressP, att.goals - def.goals))
             scoreGoal(att, def, ai, shooter, assist, kind, xg)
             return
         }
+        // xG-based learning rewards calibration of shot choice quality, not a fixed goal bonus.
+        shooter.p.learning.update(PlayerLearningState.encode(zone, shooter.cond, def.pressP, att.goals - def.goals), PlayerAction.SHOOT,
+            (-xg).coerceIn(-1f, 1f), PlayerLearningState.encode(zone, shooter.cond, def.pressP, att.goals - def.goals))
         // non-goal: save, block or miss
         val headerKind = kind == S_HEAD || kind == S_COR
         val wSave = 0.16f + 1.25f * xg

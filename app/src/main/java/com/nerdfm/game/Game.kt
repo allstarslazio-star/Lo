@@ -203,6 +203,11 @@ object Game {
                 // occasional reminders are handled in the squad screen; no spam
             }
         }
+        // Persist the human manager's commonly used tactical settings for AI adaptation.
+        w.humanTacticSamples++
+        w.humanPressingTotal += me.tactics.pressing
+        w.humanLineTotal += me.tactics.line
+        w.humanTempoTotal += me.tactics.tempo
         // board pressure
         val bill = w.wageBill(me)
         if (bill > me.wageBudget) {

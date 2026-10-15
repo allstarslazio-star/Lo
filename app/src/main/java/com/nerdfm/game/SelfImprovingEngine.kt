@@ -109,6 +109,16 @@ object ManagerPopulationTraining {
                     genome.copyGenesFrom(parent)
                     genome.mutate(random, if (index >= byClub.size * 3 / 4) 0.42f else 0.24f)
                 }
+                // Small bounded counter-tactic bias against the human's most-used settings.
+                if (world.humanTacticSamples > 0 && !club.human) {
+                    val n = world.humanTacticSamples.toFloat()
+                    val humanPress = world.humanPressingTotal / n
+                    val humanLine = world.humanLineTotal / n
+                    val humanTempo = world.humanTempoTotal / n
+                    genome.pressing = (genome.pressing + (1f - humanPress) * 0.08f).coerceIn(0f, 2f)
+                    genome.line = (genome.line + (1f - humanLine) * 0.06f).coerceIn(0f, 2f)
+                    genome.tempo = (genome.tempo + (1f - humanTempo) * 0.04f).coerceIn(0f, 2f)
+                }
                 genome.applyTo(club.tactics)
             }
         }

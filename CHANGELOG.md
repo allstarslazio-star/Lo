@@ -42,3 +42,12 @@
 
 - The Finance screen now clamps requested weekly wage caps to a revenue/balance-based board range, explains when a requested cap is adjusted, and displays an explicit overspend warning. Weekly processing also emits a deduplicated board-news warning while wages exceed budget; the existing confidence penalty remains.
 - Added tests for positive, ordered bounds and tighter limits when the club is in deficit. **NOT VERIFIED:** Gradle/JUnit/Android compilation not run. Reference informed: `05-wishlist.md` (adjust wage cap when finances allow; warn board when over budget).
+
+## Phase 10 — bounded shooting/pressing learning and tactical adaptation
+
+- Q-learning now receives xG-residual rewards for shot outcomes and a bounded reward for pressing decisions during ball recovery; pressing preferences make a small bounded adjustment to transition behavior. Existing build-up learning remains unchanged. AI manager genomes gain a small counter-tactic bias based on aggregate human pressing, line, and tempo usage sampled across weekly advances.
+- Added a deterministic 200-season learning/genome stress test (8,000 shooting/pressing updates), plus existing bounds tests remain in place. This is a learning-state stress test, **not** a 200-season full match simulation. **NOT VERIFIED:** Gradle/JUnit/Android compilation and runtime simulation not run. Reference informed: `06-code-review-notes.md` and `05-wishlist.md` (shooting/pressing Q-learning and adaptation to human tactics); no external engine code copied.
+
+## Final review / verification status
+
+- Reviewed the six phase commits and checked the complete diff for whitespace errors. **NOT VERIFIED:** Gradle/JUnit/Android compilation and runtime simulation were not run, as instructed. No claims are made about Kotlin/Compose compilation, unit-test results, APK assembly, match calibration, or full 200-season gameplay.

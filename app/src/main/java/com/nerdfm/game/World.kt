@@ -36,6 +36,11 @@ class World : Serializable {
     var transferFilterMinOverall = 45
     var transferFilterMaxAge = 34
     var transferSearchTab = 0
+    /** Aggregate human tactic usage for long-term AI counter-tactic adaptation. */
+    var humanTacticSamples = 0
+    var humanPressingTotal = 0L
+    var humanLineTotal = 0L
+    var humanTempoTotal = 0L
 
     private companion object {
         private const val serialVersionUID: Long = 1L

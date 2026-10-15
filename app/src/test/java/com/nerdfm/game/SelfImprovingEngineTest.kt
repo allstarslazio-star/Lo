@@ -36,6 +36,26 @@ class SelfImprovingEngineTest {
         assertTrue(calibration.fatigueMultiplier in 0.85f..1.15f)
     }
 
+    @Test fun shootingAndPressingActionsLearnFromBoundedRewardsAcrossTwoHundredSeasons() {
+        val profile = PlayerLearningProfile()
+        val genome = ManagerGenome()
+        val random = Random(20261015)
+        repeat(200) { season ->
+            repeat(20) { match ->
+                val state = PlayerLearningState.encode(match % 3, (100 - match).toFloat(), (match % 3 * 30).toFloat(), (season % 5) - 2)
+                profile.update(state, PlayerAction.SHOOT, if (match % 4 == 0) 0.75f else -0.2f, state)
+                profile.update(state, PlayerAction.PRESS, if (match % 2 == 0) 0.2f else -0.08f, state)
+            }
+            genome.mutate(random, 0.08f)
+            assertTrue(genome.pressing in 0f..2f)
+            assertTrue(genome.line in 0f..2f)
+            assertTrue(genome.tempo in 0f..2f)
+        }
+        assertTrue(profile.decisionsObserved == 8_000L)
+        assertTrue(profile.value(0, PlayerAction.SHOOT) in -1f..1f)
+        assertTrue(profile.value(0, PlayerAction.PRESS) in -1f..1f)
+    }
+
     @Test fun calibrationWaitsForLargeMatchBatch() {
         val calibration = MatchCalibration()
         repeat(63) { calibration.recordMatch(3, 20) }
