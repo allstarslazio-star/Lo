@@ -38,14 +38,14 @@ fun GameShell(w: World, tick: Int) {
     fun runAdvance() {
         scope.launch {
             if (fx != null) {
-                val f = heavy("Simulating the rest of the round...") { Game.startWeek(w) }
+                val f = heavy("Simulating the rest of the round") { Game.startWeek(w) }
                 if (f != null) {
                     App.pendingFixture = f
                     App.engine = Game.humanEngine(w, f)
                     App.mode = Mode.MATCH
                 } else App.bump()
             } else {
-                heavy(if (w.week == 34) "Season rollover..." else "Advancing a week...") {
+                heavy(if (w.week == 34) "Season rollover" else "Advancing a week") {
                     Game.startWeek(w)
                     Game.completeWeek(w)
                 }
@@ -362,7 +362,7 @@ fun SackedScreen(w: World) {
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(2.dp)).background(C.card)
                         .clickable {
                             scope.launch {
-                                heavy("Moving to ${c.name}...") {
+                                heavy("Moving to ${c.name}") {
                                     old.human = false
                                     old.autoPick = true
                                     c.human = true

@@ -200,6 +200,9 @@ class Player(
     var scoutInterestClubId = -1
     var scoutInterestWeeks = 0
     var ovr = 0
+    /** Overall at the last season rollover (0 = unknown) and the change made at that rollover. */
+    var seasonStartOvr = 0
+    var lastDevDelta = 0
     var apps = 0
     var goals = 0
     var assists = 0
@@ -224,6 +227,24 @@ class Player(
     fun ovrAt(p: Pos): Int = (Roles.overall(attrs, p) * Roles.familiarity(this, p)).roundToInt()
 
     fun avgRating(): Float = if (apps == 0) 0f else ratingSum / apps
+
+    /** Season-on-season development (not form): change since last rollover, else the last rollover change. */
+    /** Rate stat per 90 minutes played (0 when the player has barely played). */
+    fun per90(total: Double): Double = if (minutes < 90) 0.0 else total * 90.0 / minutes
+
+    fun shotAccuracyPct(): Int = if (seasonShots == 0) 0 else (100.0 * seasonShotsOnTarget / seasonShots).toInt()
+
+    fun developmentDelta(): Int =
+        if (seasonStartOvr > 0 && ovr != seasonStartOvr) ovr - seasonStartOvr else lastDevDelta
+
+    fun developmentTrend(): String {
+        val d = developmentDelta()
+        return when {
+            d >= 1 -> "↑ +$d OVR"
+            d <= -1 -> "↓ $d OVR"
+            else -> "→ No change"
+        }
+    }
 
     fun performanceTrend(): String = when {
         form >= 65f -> "↑ Improving"

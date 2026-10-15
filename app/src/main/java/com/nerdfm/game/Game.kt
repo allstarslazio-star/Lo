@@ -340,7 +340,10 @@ object Game {
         val retired = ArrayList<Player>()
         for (p in w.players.values.toList()) {
             p.age++
+            val devStart = if (p.seasonStartOvr > 0) p.seasonStartOvr else p.ovr
             develop(w, p, rnd)
+            p.lastDevDelta = p.ovr - devStart
+            p.seasonStartOvr = p.ovr
             p.seasonsAtClub++
             if (p.age >= 34 && rnd.nextDouble() < (p.age - 33) * 0.25) retired.add(p)
         }

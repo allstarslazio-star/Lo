@@ -18,6 +18,12 @@ object Transfers {
         return (p.wageDemand() * (1.0 + gap * 0.02)).toInt()
     }
 
+    /** Undecided players need a persuasion premium on top of the base wage; Interested players do not. */
+    fun requiredWage(me: Club, p: Player): Int {
+        val base = wantedWage(me, p)
+        return if (interestLabel(me, p) == "Undecided") (base * 1.15).toInt() else base
+    }
+
     fun willJoin(me: Club, p: Player): Boolean = requiredRep(p) - me.rep <= 25
 
     fun interestLabel(me: Club, p: Player): String = when {
@@ -28,7 +34,7 @@ object Transfers {
 
     fun interestReason(me: Club, p: Player): String = when (interestLabel(me, p)) {
         "Interested" -> "Your club's reputation meets the player's expectations."
-        "Undecided" -> "The player may need a stronger contract to consider joining."
+        "Undecided" -> "The player needs a wage about 15% above his normal demand to be persuaded."
         else -> "The player expects a club with a much higher reputation."
     }
 
@@ -83,7 +89,7 @@ object Transfers {
     fun completeSigning(w: World, p: Player, fee: Long, wage: Int, years: Int, signingBonus: Long = 0L): Pair<Boolean, String> {
         val me = w.human()
         if (!willJoin(me, p)) return false to "${p.name} is not interested in joining a club of your stature."
-        val wanted = wantedWage(me, p)
+        val wanted = requiredWage(me, p)
         if (wage < wanted) return false to "${p.name} wants at least ${money(wanted.toLong())} per week."
         if (signingBonus < 0L || (signingBonus > 0L && signingBonus > me.balance - fee)) return false to "The club cannot afford that signing bonus on top of the transfer fee."
         val newBill = w.wageBill(me) + wage

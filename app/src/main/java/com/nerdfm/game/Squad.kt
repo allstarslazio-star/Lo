@@ -195,6 +195,7 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, readOnly: Boolean = f
                         T("Potential ${potText(w, p)} stars", 12)
                         T("Fitness ${p.condition.roundToInt()}%  Sharpness ${p.sharpness.roundToInt()}%", 12, if (p.condition < 65f || p.sharpness < 50f) C.amber else C.muted, lines = 2)
                         T("Morale ${p.morale.roundToInt()}  Form ${p.form.roundToInt()}% · ${p.performanceTrend()}", 12, when { p.form >= 65f -> C.green; p.form <= 55f -> C.red; else -> C.muted }, lines = 2)
+                        T("Development ${p.developmentTrend()}", 12, when { p.developmentDelta() > 0 -> C.green; p.developmentDelta() < 0 -> C.red; else -> C.muted })
                         T("Value ${money(p.value())}  |  Wage demand ${money(p.wageDemand().toLong())}/wk", 12)
                         if (own && p.scoutInterestClubId >= 0 && p.scoutInterestWeeks > 0) {
                             val scoutClub = w.clubs.getOrNull(p.scoutInterestClubId)
@@ -205,6 +206,10 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, readOnly: Boolean = f
                         T("Career performance", 13, C.accent, true)
                         T("Minutes ${p.minutes}  |  Shots ${p.seasonShots}  |  On target ${p.seasonShotsOnTarget}", 11, C.muted, lines = 2)
                         T("xG ${"%.2f".format(p.seasonXg)}  |  Key passes ${p.seasonKeyPasses}", 11, C.muted, lines = 2)
+                        if (p.minutes >= 90) {
+                            T("Per 90: ${"%.2f".format(p.per90(p.goals.toDouble()))} goals  |  ${"%.2f".format(p.per90(p.assists.toDouble()))} assists  |  ${"%.2f".format(p.per90(p.seasonXg))} xG", 11, C.muted, lines = 2)
+                            T("Finishing vs xG: ${"%+.2f".format(p.goals - p.seasonXg)}  |  Shot accuracy ${p.shotAccuracyPct()}%", 11, if (p.goals - p.seasonXg >= 0.5) C.green else if (p.goals - p.seasonXg <= -0.5) C.red else C.muted, lines = 2)
+                        }
                         T("Tackles ${p.seasonTackles}  |  Interceptions ${p.seasonInterceptions}  |  Saves ${p.seasonSaves}", 11, C.muted, lines = 2)
                         if (own) {
                             T("Wage ${money(p.wage.toLong())}/wk  until ${p.contractEnd}", 12)
@@ -278,7 +283,7 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, readOnly: Boolean = f
         }
         "terms", "renew" -> {
             val renew = step == "renew"
-            val wanted = if (renew) p.wageDemand() else Transfers.wantedWage(me, p)
+            val wanted = if (renew) p.wageDemand() else Transfers.requiredWage(me, p)
             var wageText by remember { mutableStateOf(wanted.toString()) }
             var bonusText by remember { mutableStateOf("0") }
             var years by remember { mutableIntStateOf(3) }

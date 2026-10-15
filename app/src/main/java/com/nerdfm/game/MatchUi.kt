@@ -92,7 +92,7 @@ fun MatchScreen(w: World) {
                     Spacer(Modifier.height(8.dp))
                     Btn("Continue", modifier = Modifier.fillMaxWidth()) {
                         scope.launch {
-                            heavy("Processing results...") {
+                            heavy("Processing results") {
                                 Game.finishHuman(w, fx, eng)
                                 Game.completeWeek(w)
                             }

@@ -45,7 +45,7 @@ fun MainMenu() {
             }
             Btn("Continue Career", enabled = hasSave, modifier = Modifier.fillMaxWidth()) {
                 scope.launch {
-                    val result = heavy("Loading career...") { Persistence.load(ctx.filesDir) }
+                    val result = heavy("Loading career") { Persistence.load(ctx.filesDir) }
                     when (result) {
                         is LoadResult.Loaded -> {
                             App.world = result.world
@@ -114,7 +114,7 @@ fun NewGameScreen() {
             Spacer(Modifier.weight(1f))
             Btn("Start career", enabled = pw != null && picked >= 0) {
                 scope.launch {
-                    val w = heavy("Building the football world...") {
+                    val w = heavy("Building the football world") {
                         val g = WorldGen.generate(seed, name.ifBlank { "Manager" }, picked)
                         g.addNews("Welcome", "The board have appointed you at ${g.human().name}. Expect a tough job.")
                         g

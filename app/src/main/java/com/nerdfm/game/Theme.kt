@@ -66,7 +66,7 @@ fun Btn(text: String, enabled: Boolean = true, modifier: Modifier = Modifier, on
         onClick = onClick, enabled = enabled, modifier = modifier,
         shape = RoundedCornerShape(2.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-    ) { Text(text, fontSize = 13.sp, maxLines = 1) }
+    ) { Text(text, fontSize = if (text.length > 16) 11.sp else 13.sp, maxLines = 2, lineHeight = 13.sp) }
 }
 
 @Composable
@@ -117,13 +117,13 @@ fun ovrColor(v: Int): Color = when {
 
 @Composable
 fun Cell(text: String, w: Int, color: Color = C.text, bold: Boolean = false) {
-    T(text, 12, color, bold, Modifier.width(w.dp))
+    T(text, 12, color, bold, Modifier.width(w.dp), lines = 2)
 }
 
 /** Like [Cell] but tapping the name opens the player's profile. */
 @Composable
 fun PlayerCell(p: Player, w: Int, color: Color = C.text, bold: Boolean = false) {
-    T(p.name, 12, color, bold, Modifier.width(w.dp).clickable { App.profilePlayerId = p.id })
+    T(p.name, 12, color, bold, Modifier.width(w.dp).clickable { App.profilePlayerId = p.id }, lines = 2)
 }
 
 /** Tap keeps the row's own action; long-press opens the player's profile. */

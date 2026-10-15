@@ -64,3 +64,14 @@
 - Release build now uses R8 minification and resource shrinking (own classes kept because saves use Java serialization) and CI uploads `NerdFM-release-apk`. **NOT VERIFIED: needs a CI run, and a save made by a debug build must still load on the release build.**
 - Player profile opens from any screen: tap a name where it is only displayed, long-press rows that already have a tap action (lineup, bench, reserves, training, substitution dialog). View-only during a match. **Compose code NOT VERIFIED (CI only).**
 - Day-by-day calendar: `World.dayInWeek` (0..6, old saves load as 0), "Next day" button, day-accurate transfer windows, deadline-day news. Continue/Play still jumps to matchday. **Logic covered by `WorldCalendarTest`; UI NOT VERIFIED.**
+
+## Phase 11 — realism retune and remaining fixes
+
+- Engine: `TEMPO` 1.9→3.3, `GOAL` 0.63→1.07, `YEL` 0.16→0.30, `RED` 0.0008→0.0019 (chance of one constant family at a time was explored on a scratch copy first). Offline driver, seeds 3000000..3000499: goals 2.694, yellows 4.010, reds 0.106, draws 27.8%, shots 25.8. Unseen seeds 4000000..4000999 (1,000 matches): goals 2.780, yellows 4.019, reds 0.121, draws 23.9%, shots 26.1, 8+ goal matches 0.9%. Before: shots ~45, draws 22.2%. **CI report NOT YET SEEN: compare with these numbers.**
+- Improving/declining arrow on the profile is now development (OVR change since last season rollover) via `Player.seasonStartOvr` / `lastDevDelta`; the form trend is kept separately.
+- Profile shows per-90 goals/assists/xG, finishing vs xG and shot accuracy.
+- "Undecided" players now need a 15% wage premium (`Transfers.requiredWage`), shown in the terms dialog.
+- Old saves: `scoutInterestClubId` is normalised to -1 on load when no interest is pending.
+- Text: table cells wrap to two lines instead of clipping; long button labels shrink and wrap; trailing "..." removed from loading messages. **Compose changes NOT VERIFIED (CI only).**
+- Offers: reviewed accept/reject/counter paths; accepted offers are removed (including other offers for the same player) and rejected ones are removed, so no change was needed.
+- Tests: 48 pass offline (38 original + 6 calendar + 4 new).

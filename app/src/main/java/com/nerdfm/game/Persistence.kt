@@ -159,6 +159,8 @@ object Persistence {
         if (world.matchCalibration == null) world.matchCalibration = MatchCalibration()
         for (player in world.players.values) {
             if (player.learning == null) player.learning = PlayerLearningProfile()
+            // Old saves deserialise the newer scouting club id as 0; it only means something while weeks > 0.
+            if (player.scoutInterestWeeks <= 0) player.scoutInterestClubId = -1
         }
         for (club in world.clubs) {
             if (club.managerGenome == null) club.managerGenome = ManagerGenome()

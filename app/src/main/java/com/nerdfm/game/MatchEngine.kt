@@ -297,16 +297,16 @@ private object K {
     var A1 = 0.55f; var B1 = 1.20f      // midfield (-> final third)
     var A2 = -0.55f; var B2 = 1.30f     // final third (-> shot)
     var HOME = 0.035f                    // home edge on control / press
-    var GOAL = 0.63f                     // shot -> goal conversion (Phase 4: 0.36 masked ~3x too many chances; retuned with TEMPO)
+    var GOAL = 1.07f                     // shot -> goal conversion (Phase 11 retune with TEMPO: ~26 shots/match, ~10% conversion)
     var XG = 1.00f                       // global chance-quality scale
     var FOUL = 1.00f                     // global foul scale
     var PEN = 0.060f                     // chance a foul in the final third is a penalty
     var CORNER = 0.11f                   // chance a failed final-third move ends in a corner
     var OFFSIDE = 0.085f
     var LONG = 0.02f                     // chance of a speculative long shot (Phase 4: was 0.055)
-    var TEMPO = 1.9f                     // Phase 4: scales possession-phase length; was implicitly 1.0 (~2x too many shots/fouls/corners/cards)
-    var YEL = 0.16f                      // base yellow-card chance per foul (was 0.145)
-    var RED = 0.0008f                    // base straight-red chance per foul (was 0.0026)
+    var TEMPO = 3.3f                     // Phase 11: shots/fouls scale ~1/TEMPO; 3.3 gives ~26 total shots per match (was 1.9 = ~45)
+    var YEL = 0.30f                      // base yellow-card chance per foul (was 0.145)
+    var RED = 0.0019f                    // base straight-red chance per foul (was 0.0026)
     var REPEAT = 0.25f                   // players already booked foul this fraction as often (was 0.75)
     const val MAX_TOTAL_GOALS = 8        // guardrail: once 8 goals are in, nobody scores again (garbage-time realism)
 }
