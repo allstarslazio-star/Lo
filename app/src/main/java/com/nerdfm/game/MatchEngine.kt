@@ -297,13 +297,18 @@ private object K {
     var A1 = 0.55f; var B1 = 1.20f      // midfield (-> final third)
     var A2 = -0.55f; var B2 = 1.30f     // final third (-> shot)
     var HOME = 0.035f                    // home edge on control / press
-    var GOAL = 0.36f                     // conservative conversion to avoid arcade-like scorelines
+    var GOAL = 0.63f                     // shot -> goal conversion (Phase 4: 0.36 masked ~3x too many chances; retuned with TEMPO)
     var XG = 1.00f                       // global chance-quality scale
     var FOUL = 1.00f                     // global foul scale
     var PEN = 0.060f                     // chance a foul in the final third is a penalty
     var CORNER = 0.11f                   // chance a failed final-third move ends in a corner
     var OFFSIDE = 0.085f
-    var LONG = 0.055f                    // chance of a speculative long shot
+    var LONG = 0.02f                     // chance of a speculative long shot (Phase 4: was 0.055)
+    var TEMPO = 1.9f                     // Phase 4: scales possession-phase length; was implicitly 1.0 (~2x too many shots/fouls/corners/cards)
+    var YEL = 0.16f                      // base yellow-card chance per foul (was 0.145)
+    var RED = 0.0008f                    // base straight-red chance per foul (was 0.0026)
+    var REPEAT = 0.25f                   // players already booked foul this fraction as often (was 0.75)
+    const val MAX_TOTAL_GOALS = 8        // guardrail: once 8 goals are in, nobody scores again (garbage-time realism)
 }
 
 // shot kinds
@@ -595,6 +600,7 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
         dur *= (if (att.eTempo == 0) 1.18f else if (att.eTempo == 2) 0.84f else 1f)
         dur *= (if (att.ePass == 0) 1.08f else if (att.ePass == 2) 0.88f else 1f)
         dur *= 0.65f + 0.8f * rf()
+        dur *= K.TEMPO
         possSec[ai] += dur.toDouble()
         when (z) {
             0 -> buildUp(att, def, ai)
@@ -952,7 +958,8 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
         val gkQ = if (oneOne) 0.55f * def.gkStop + 0.45f * def.gk1 else def.gkStop
         val fq = shotQuality(shooter, kind)
         val skill = ((fq / 60f).pow(0.6f) / (max(15f, gkQ) / 60f).pow(0.55f)).coerceIn(0.45f, 1.9f)
-        val pGoal = clampF(xg * skill * K.GOAL * calibration.shotConversionMultiplier, 0f, 0.97f)
+        val capped = home.goals + away.goals >= K.MAX_TOTAL_GOALS
+        val pGoal = if (capped) 0f else clampF(xg * skill * K.GOAL * calibration.shotConversionMultiplier, 0f, 0.97f)
         val name = shooter.p.name
         if (rf() < pGoal) {
             // offside / VAR check on open-play goals
@@ -1148,7 +1155,7 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
         add(ai, 6, "Penalty to ${att.club.name}! ${taker.p.name} steps up.")
         val q = shotQuality(taker, S_PEN)
         val pg = clampF(0.76f * K.GOAL * (q / 60f).pow(0.5f) / (max(15f, def.gkStop) / 60f).pow(0.3f), 0.5f, 0.92f)
-        if (rf() < pg) {
+        if (home.goals + away.goals < K.MAX_TOTAL_GOALS && rf() < pg) {
             att.goals++
             att.sot++
             taker.goals++
@@ -1183,16 +1190,16 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
                 1 -> when (g) { 0 -> 0f; 1 -> 0.5f; 2 -> 1.0f; 3 -> 0.6f; else -> 0.3f }
                 else -> when (g) { 0 -> 0f; 1 -> 0.2f; 2 -> 0.5f; 3 -> 0.8f; else -> 1.0f }
             }
-            zw * (ps.p.attrs.at(Attr.Aggression) + 5f) * (if (ps.yc > 0) 0.75f else 1f)
+            zw * (ps.p.attrs.at(Attr.Aggression) + 5f) * (if (ps.yc > 0) K.REPEAT else 1f)
         } ?: return
         def.fouls++
         fouler.fouls++
         victim?.let { it.fouled++ }
         val hc = if (di == 0) 0.93f else 1.07f
         val aggr = fouler.p.attrs.at(Attr.Aggression)
-        var pY = 0.145f * (0.70f + aggr / 20f * 0.70f) * refStrict * hc * (if (z == 2) 1.12f else 1f)
+        var pY = K.YEL * (0.70f + aggr / 20f * 0.70f) * refStrict * hc * (if (z == 2) 1.12f else 1f)
         if (cynical) pY *= 2.6f
-        val pR = 0.0026f * refStrict * hc * (if (cynical && z == 2) 7f else 1f)
+        val pR = K.RED * refStrict * hc * (if (cynical && z == 2) 7f else 1f)
         val c = rf()
         if (c < pR) {
             sendOff(def, fouler, di, true)
@@ -1214,7 +1221,7 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
 
     /** [att]'s player fouls (pushing, handling...), free kick to the defending side. */
     private fun foulAgainst(att: MatchTeam, def: MatchTeam, ai: Int, di: Int, z: Int) {
-        val culprit = pickBy(att.onPitch) { ps -> if (ps.slot == Pos.GK) 0f else ps.p.attrs.at(Attr.Aggression) + 6f } ?: return
+        val culprit = pickBy(att.onPitch) { ps -> if (ps.slot == Pos.GK) 0f else (ps.p.attrs.at(Attr.Aggression) + 6f) * (if (ps.yc > 0) K.REPEAT else 1f) } ?: return
         att.fouls++
         culprit.fouls++
         rate(culprit, -0.04f)
@@ -1239,7 +1246,7 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
             if (rf() > 0.035f * K.FOUL) continue
             val tm = teams[i]
             val opp = teams[1 - i]
-            val culprit = pickBy(tm.onPitch) { ps -> if (ps.slot == Pos.GK) 0f else ps.p.attrs.at(Attr.Aggression) + 5f } ?: continue
+            val culprit = pickBy(tm.onPitch) { ps -> if (ps.slot == Pos.GK) 0f else (ps.p.attrs.at(Attr.Aggression) + 5f) * (if (ps.yc > 0) K.REPEAT else 1f) } ?: continue
             tm.fouls++
             culprit.fouls++
             val pY = 0.12f * refStrict * (if (i == 0) 0.93f else 1.07f)

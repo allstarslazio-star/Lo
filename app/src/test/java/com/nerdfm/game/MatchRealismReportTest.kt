@@ -22,7 +22,10 @@ class MatchRealismReportTest {
             MatchEngine(home, away, Random(seed xor 0xB47C4L), world.matchCalibration).also { engines[seed] = it }
         })
 
-        val ratings = engines.values.flatMap { it.home.everyone + it.away.everyone }.map { it.rating }
+        // Raw in-match ratings are unclamped; the game clamps them to 3..10 when a match is applied to players.
+        val rawRatings = engines.values.flatMap { it.home.everyone + it.away.everyone }.map { it.rating }
+        engines.forEach { (seed, engine) -> engine.applyToPlayers(Random(seed xor 0xA991L)) }
+        val ratings = engines.values.flatMap { it.home.everyone + it.away.everyone }.filter { it.played }.map { it.rating }
 
         val rows = batch.matches.map { it.audit }
         val yellowCards = engines.values.sumOf { it.home.yellows + it.away.yellows }.toDouble() / rows.size
@@ -47,7 +50,14 @@ class MatchRealismReportTest {
             appendLine("Away win rate: %.2f%%".format(batch.awayWinRate * 100.0))
             appendLine("Yellow cards/match: %.3f".format(yellowCards))
             appendLine("Red cards/match: %.3f".format(redCards))
-            appendLine("Player ratings range: %.3f..%.3f".format(ratings.minOrNull(), ratings.maxOrNull()))
+            appendLine("Raw in-match player ratings (before clamp): %.3f..%.3f; above 10.0: %.2f%%".format(
+                rawRatings.minOrNull(), rawRatings.maxOrNull(), 100.0 * rawRatings.count { it > 10f } / rawRatings.size))
+            appendLine("Final stored player ratings (after applyToPlayers): %.3f..%.3f".format(ratings.minOrNull(), ratings.maxOrNull()))
+            appendLine("Fouls/match: %.2f; corners/match: %.2f; shots/match: %.2f".format(
+                engines.values.sumOf { it.home.fouls + it.away.fouls }.toDouble() / rows.size,
+                engines.values.sumOf { it.home.corners + it.away.corners }.toDouble() / rows.size,
+                batch.totalShots.mean))
+            appendLine("Matches with 8+ total goals: ${rows.count { it.totalGoals >= 8 }} of ${rows.size}; highest total: ${rows.maxOf { it.totalGoals }}")
             appendLine("\nFITTED POISSON CHI-SQUARE GOODNESS-OF-FIT")
             appendLine("Metric | fitted lambda | pooled bins | chi-square | df | p-value")
             appendLine(homeFit.asReportRow("Home goals"))
