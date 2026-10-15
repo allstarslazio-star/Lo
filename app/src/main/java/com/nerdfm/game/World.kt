@@ -4,6 +4,7 @@ import java.io.Serializable
 import kotlin.random.Random
 
 class World : Serializable {
+    var saveVersion: Int = Persistence.CURRENT_SAVE_VERSION
     var seed = 0L
     var year = 2026
     var week = 0
@@ -28,13 +29,17 @@ class World : Serializable {
     var trophies = 0
     var lastResult = ""
     /** Persisted global calibration state; updates are applied only from aggregate batches. */
-    val matchCalibration = MatchCalibration()
+    var matchCalibration = MatchCalibration()
     // Transfer-search filters are career state, so leaving the screen never resets them.
     var transferFilterLeague = 0
     var transferFilterPosition = 0
     var transferFilterMinOverall = 45
     var transferFilterMaxAge = 34
     var transferSearchTab = 0
+
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
 
     fun human(): Club = clubs[humanClubId]
     fun club(id: Int): Club = clubs[id]

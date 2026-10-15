@@ -8,6 +8,7 @@ import kotlin.random.Random
 enum class PlayerAction { SHORT_PASS, LONG_PASS, DRIBBLE, SHOOT, HOLD, PRESS }
 
 class PlayerLearningProfile : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
     private val q = HashMap<Int, FloatArray>()
     var decisionsObserved: Long = 0
         private set
@@ -68,6 +69,8 @@ class ManagerGenome : Serializable {
     }
 
     companion object {
+        private const val serialVersionUID: Long = 1L
+
         private fun gaussian(random: Random): Float {
             val u1 = max(1e-6f, random.nextFloat())
             val u2 = random.nextFloat()
@@ -114,6 +117,7 @@ object ManagerPopulationTraining {
 
 /** Bounded online calibration against target aggregate statistics, never individual scorelines. */
 class MatchCalibration : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
     var shotConversionMultiplier = 1f
     var chanceCreationMultiplier = 1f
     var fatigueMultiplier = 1f

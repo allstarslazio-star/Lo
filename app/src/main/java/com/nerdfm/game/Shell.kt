@@ -49,7 +49,7 @@ fun GameShell(w: World, tick: Int) {
                     Game.startWeek(w)
                     Game.completeWeek(w)
                 }
-                withContext(Dispatchers.IO) { Persistence.save(ctx, w) }
+                withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
                 App.bump()
             }
         }
@@ -148,7 +148,7 @@ fun GameShell(w: World, tick: Int) {
                 Btn("Save & quit to menu") {
                     menu = false
                     scope.launch {
-                        withContext(Dispatchers.IO) { Persistence.save(ctx, w) }
+                        withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
                         App.mode = Mode.MENU
                     }
                 }
@@ -365,7 +365,7 @@ fun SackedScreen(w: World) {
                                     w.addNews("New job", "You are the new manager of ${c.name}.")
                                     Lineups.autoPick(w, c)
                                 }
-                                withContext(Dispatchers.IO) { Persistence.save(ctx, w) }
+                                withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
                                 App.screen = "Inbox"
                                 App.bump()
                             }
@@ -377,6 +377,6 @@ fun SackedScreen(w: World) {
                 }
             }
         }
-        Btn("Retire to the main menu") { App.mode = Mode.MENU; App.world = null; Persistence.delete(ctx) }
+        Btn("Retire to the main menu") { App.mode = Mode.MENU; App.world = null; Persistence.delete(ctx.filesDir) }
     }
 }

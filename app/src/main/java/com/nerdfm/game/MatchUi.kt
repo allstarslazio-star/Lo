@@ -96,7 +96,7 @@ fun MatchScreen(w: World) {
                                 Game.finishHuman(w, fx, eng)
                                 Game.completeWeek(w)
                             }
-                            withContext(Dispatchers.IO) { Persistence.save(ctx, w) }
+                            withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
                             App.engine = null
                             App.pendingFixture = null
                             App.mode = Mode.GAME

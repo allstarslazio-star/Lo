@@ -134,7 +134,9 @@ object Roles {
     }
 }
 
-class Formation(val name: String, val slots: List<Pos>, val attM: Float, val midM: Float, val defM: Float) : Serializable
+class Formation(val name: String, val slots: List<Pos>, val attM: Float, val midM: Float, val defM: Float) : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
+}
 
 object Formations {
     val list: List<Formation> = listOf(
@@ -149,6 +151,7 @@ object Formations {
 }
 
 class Tactics : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
     var formation = 0
     var mentality = 0   // -2 .. 2
     var tempo = 1       // 0 low, 1 normal, 2 high
@@ -178,6 +181,7 @@ class Player(
     val ambition: Int,
     val loyalty: Int
 ) : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
     var clubId = -1
     var wage = 0
     var contractEnd = 2027
@@ -208,7 +212,7 @@ class Player(
     var lastMinutes = 0
     var seasonsAtClub = 0
     /** Persistent, compact reinforcement-learning table; no neural runtime required. */
-    val learning = PlayerLearningProfile()
+    var learning = PlayerLearningProfile()
 
     fun refresh() {
         ovr = Roles.overall(attrs, pos).roundToInt()
@@ -252,6 +256,7 @@ class Club(
     val colorA: Long,
     val colorB: Long
 ) : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
     var balance = 0L
     var revenue = 0L           // annual
     var wageBudget = 0L        // weekly
@@ -261,7 +266,7 @@ class Club(
     var scout = 8
     var human = false
     /** Evolutionary policy genes used by AI clubs between seasons. */
-    val managerGenome = ManagerGenome()
+    var managerGenome = ManagerGenome()
     val players = ArrayList<Int>()
     val tactics = Tactics()
     val lineup = IntArray(11) { -1 }
@@ -279,6 +284,7 @@ class Club(
 }
 
 class TableRow(val clubId: Int) : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
     var p = 0
     var w = 0
     var d = 0
@@ -291,6 +297,7 @@ class TableRow(val clubId: Int) : Serializable {
 }
 
 class Fixture(val round: Int, val home: Int, val away: Int) : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
     var played = false
     var hg = 0
     var ag = 0
@@ -298,6 +305,7 @@ class Fixture(val round: Int, val home: Int, val away: Int) : Serializable {
 }
 
 class League(val id: Int, val name: String, val tier: Int) : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
     val clubIds = ArrayList<Int>()
     val fixtures = ArrayList<Fixture>()
     val table = HashMap<Int, TableRow>()
@@ -309,10 +317,13 @@ class League(val id: Int, val name: String, val tier: Int) : Serializable {
 }
 
 class News(val year: Int, val week: Int, val title: String, val body: String) : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
     var read = false
 }
 
-class Offer(val playerId: Int, val fromClub: Int, var fee: Long, val expiresWeek: Int) : Serializable
+class Offer(val playerId: Int, val fromClub: Int, var fee: Long, val expiresWeek: Int) : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
+}
 
 class Coach(
     val id: Int,
@@ -321,9 +332,13 @@ class Coach(
     var rating: Int,
     var wage: Int,
     var reputation: Int = 50
-) : Serializable
+) : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
+}
 
-class Shortlisted(val playerId: Int) : Serializable
+class Shortlisted(val playerId: Int) : Serializable {
+    private companion object { private const val serialVersionUID: Long = 1L }
+}
 
 fun money(v: Long): String {
     val a = abs(v)

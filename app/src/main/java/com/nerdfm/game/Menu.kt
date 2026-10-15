@@ -22,7 +22,8 @@ import kotlinx.coroutines.withContext
 fun MainMenu() {
     val ctx = LocalContext.current
     val scope = App.scope
-    var hasSave by remember { mutableStateOf(Persistence.exists(ctx)) }
+    var hasSave by remember { mutableStateOf(Persistence.exists(ctx.filesDir)) }
+    var loadMessage by remember { mutableStateOf<String?>(null) }
     Row(Modifier.fillMaxSize().padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             T("NERD FM", 44, C.accent, true)
@@ -35,15 +36,39 @@ fun MainMenu() {
             Btn("New Career", modifier = Modifier.fillMaxWidth()) { App.mode = Mode.NEWGAME }
             Btn("Continue Career", enabled = hasSave, modifier = Modifier.fillMaxWidth()) {
                 scope.launch {
-                    val w = heavy("Loading career...") { Persistence.load(ctx) }
-                    if (w != null) {
-                        App.world = w
-                        App.screen = "Inbox"
-                        App.mode = Mode.GAME
-                    } else hasSave = false
+                    val result = heavy("Loading career...") { Persistence.load(ctx.filesDir) }
+                    when (result) {
+                        is LoadResult.Loaded -> {
+                            App.world = result.world
+                            App.screen = "Inbox"
+                            App.mode = Mode.GAME
+                        }
+                        LoadResult.NoSave -> {
+                            hasSave = false
+                            loadMessage = "No saved career was found. You can start a new career."
+                        }
+                        is LoadResult.Incompatible -> {
+                            hasSave = Persistence.exists(ctx.filesDir)
+                            val backup = result.backupFileName?.let { " Preserved as $it." }.orEmpty()
+                            loadMessage = "This career save is incompatible with this version of Nerd FM. It was not loaded.$backup ${result.reason}"
+                        }
+                        is LoadResult.Corrupt -> {
+                            hasSave = Persistence.exists(ctx.filesDir)
+                            val backup = result.backupFileName?.let { " Preserved as $it." }.orEmpty()
+                            loadMessage = "This career save is damaged and could not be loaded.$backup ${result.reason}"
+                        }
+                    }
                 }
             }
         }
+    }
+    if (loadMessage != null) {
+        AlertDialog(
+            onDismissRequest = { loadMessage = null },
+            title = { Text("Career save") },
+            text = { Text(loadMessage.orEmpty()) },
+            confirmButton = { TextButton(onClick = { loadMessage = null }) { Text("OK") } }
+        )
     }
 }
 
@@ -81,7 +106,7 @@ fun NewGameScreen() {
                     App.world = w
                     App.screen = "Inbox"
                     App.mode = Mode.GAME
-                    withContext(Dispatchers.IO) { Persistence.save(ctx, w) }
+                    withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
                 }
             }
         }
