@@ -20,6 +20,9 @@ jobs:
         run: |
           set -o pipefail
           gradle testDebugUnitTest assembleDebug --no-daemon --continue --stacktrace 2>&1 | tee build-log.txt
+      - name: Build smaller release APK (R8)
+        continue-on-error: true
+        run: gradle assembleRelease --no-daemon --stacktrace
       - name: Show build errors
         if: failure()
         shell: bash
@@ -49,3 +52,8 @@ jobs:
         with:
           name: NerdFM-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: NerdFM-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
