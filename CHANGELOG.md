@@ -7,3 +7,11 @@
 - Career retirement now archives by rename without deserializing, and its call site dispatches deletion to `Dispatchers.IO`. **Implementation: VERIFIED by source inspection; runtime behavior NOT VERIFIED.**
 - Added whole-save timing separately from temporary-file read-back verification and tracked already-verified saves to avoid deserializing them again during overwrite. **Implementation: VERIFIED by source inspection; timing numbers NOT VERIFIED.**
 - Added 4 persistence tests. **Execution/count in CI: NOT VERIFIED.** The 12 existing `PersistenceTest` test bodies were not intentionally edited; one existing timing test gained an assertion for the new whole-save timer.
+
+## Phase 3 — measure-only realism report
+
+- Added a deterministic 500-fixture diagnostic test using seeds `3000000..3000499`, freshly generated world/squads per fixture, `MatchBatchRunner`, and `MatchBalanceEvaluator`. **Execution and all measured numbers: NOT VERIFIED (Gradle not run).**
+- Report includes mean home/away/total goals, home/draw/away rates, yellow/red cards per match, fitted Poisson chi-square statistics and p-values with sparse-tail pooling, target deltas, and rating/goal-cap guardrails. Hard assertions do not assert realism. **NOT VERIFIED.**
+- Added CI log streaming, failure-line extraction, realism-report printing, and build-log/report artifacts. **Workflow behavior: NOT VERIFIED (CI not run here).**
+- Targets are user-supplied: goals/match 2.75 (1,045/380), draw rate 27.4% (104/380), decisive matches 72.6%, yellow cards/match 4.05 (single secondary source, koppafootball.com), red cards/match 0.126 (single secondary source, koppafootball.com); home/away win targets UNVERIFIED. Target values were not independently checked.
+- No match-engine constants or match outcome logic were changed. **VERIFIED by diff inspection.**

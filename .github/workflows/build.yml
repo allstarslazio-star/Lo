@@ -1,7 +1,7 @@
 name: Build APK
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, phase-2c, phase-3 ]
   workflow_dispatch:
 jobs:
   build:
@@ -16,13 +16,34 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Run unit tests and build debug APK
-        run: gradle testDebugUnitTest assembleDebug --no-daemon --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle testDebugUnitTest assembleDebug --no-daemon --continue --stacktrace 2>&1 | tee build-log.txt
+      - name: Show build errors
+        if: failure()
+        shell: bash
+        run: grep -E "^e: |FAILED|error:" build-log.txt | head -80
+      - name: Print realism report
+        if: always()
+        run: cat app/build/reports/realism-report.txt || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: NerdFM-build-log
+          path: build-log.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: NerdFM-realism-report
+          path: app/build/reports/realism-report.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: NerdFM-test-report
           path: app/build/reports/tests
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: NerdFM-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
