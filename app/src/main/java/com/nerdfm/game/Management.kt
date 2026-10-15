@@ -48,7 +48,7 @@ fun TrainingScreen(w: World) {
                         else -> true
                     } }
                     items(filtered, key = { it.id }) { p ->
-                        Column(Modifier.fillMaxWidth().background(if (player?.id == p.id) C.card else Color.Transparent).clickable { player = p }.padding(vertical = 5.dp)) {
+                        Column(Modifier.fillMaxWidth().background(if (player?.id == p.id) C.card else Color.Transparent).tapOrProfile(p) { player = p }.padding(vertical = 5.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Cell(p.name, 160); Cell("${p.condition.roundToInt()}%", 42, if (p.condition < 65f) C.amber else C.green)
                                 Cell("${p.sharpness.roundToInt()}%", 48, if (p.sharpness < 55f) C.amber else C.green)

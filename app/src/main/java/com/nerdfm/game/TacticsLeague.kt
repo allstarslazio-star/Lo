@@ -99,7 +99,7 @@ fun TacticsScreen(w: World) {
             }
             Btn("Pick best XI now") { Lineups.autoPick(w, me); selected = -1; tick++; App.bump() }
             Spacer(Modifier.height(6.dp))
-            T("Tap a player, then tap another to swap. Out-of-position players play at a heavy penalty.", 11, C.muted, lines = 4)
+            T("Tap a player, then tap another to swap. Long-press a player to see their profile. Out-of-position players play at a heavy penalty.", 11, C.muted, lines = 4)
         }
         Panel(Modifier.weight(1.4f).fillMaxHeight()) {
             T("Starting XI (${f.name})", 14, C.accent, true)
@@ -109,7 +109,7 @@ fun TacticsScreen(w: World) {
                     val slot = f.slots[i]
                     Row(
                         Modifier.fillMaxWidth().background(if (selected == i) C.accent.copy(alpha = 0.3f) else Color.Transparent)
-                            .clickable { tap(i) }.padding(vertical = 5.dp, horizontal = 2.dp),
+                            .tapOrProfile(p) { tap(i) }.padding(vertical = 5.dp, horizontal = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Cell(slot.label, 36, C.accent, true)
@@ -132,7 +132,7 @@ fun TacticsScreen(w: World) {
                     val p = w.players[me.bench[i]]
                     Row(
                         Modifier.fillMaxWidth().background(if (selected == 11 + i) C.accent.copy(alpha = 0.3f) else Color.Transparent)
-                            .clickable { tap(11 + i) }.padding(vertical = 5.dp, horizontal = 2.dp)
+                            .tapOrProfile(p) { tap(11 + i) }.padding(vertical = 5.dp, horizontal = 2.dp)
                     ) {
                         Cell("SUB", 34, C.muted)
                         if (p == null) Cell("-- empty --", 150, C.muted) else {
@@ -145,7 +145,7 @@ fun TacticsScreen(w: World) {
                 items(reserves, key = { it.id }) { p ->
                     Row(
                         Modifier.fillMaxWidth().background(if (selected == 100 + p.id) C.accent.copy(alpha = 0.3f) else Color.Transparent)
-                            .clickable { tap(100 + p.id) }.padding(vertical = 4.dp, horizontal = 2.dp)
+                            .tapOrProfile(p) { tap(100 + p.id) }.padding(vertical = 4.dp, horizontal = 2.dp)
                     ) {
                         Cell("RES", 34, C.muted); Cell(p.name, 150); Cell(p.pos.label, 30, C.muted)
                         Cell("${p.ovr}", 30, ovrColor(p.ovr), true); Cell(if (p.apps > 0) "%.1f".format(p.avgRating()) else "—", 34, C.accent, true); Cell(statusText(p), 50, C.red)
@@ -241,7 +241,7 @@ fun LeagueScreen(w: World) {
                     LazyColumn {
                         items(top) { p ->
                             Row(Modifier.padding(vertical = 3.dp)) {
-                                Cell(p.name, 190); Cell(w.clubs[p.clubId].name, 170, C.muted)
+                                PlayerCell(p, 190); Cell(w.clubs[p.clubId].name, 170, C.muted)
                                 Cell("${p.goals}", 30, C.text, true); Cell("${p.assists}", 30); Cell("${p.apps}", 40)
                             }
                         }

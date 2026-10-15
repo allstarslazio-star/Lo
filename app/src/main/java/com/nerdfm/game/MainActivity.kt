@@ -31,6 +31,7 @@ object App {
     var busy by mutableStateOf("")
     var pendingFixture by mutableStateOf<Fixture?>(null)
     var engine by mutableStateOf<MatchEngine?>(null)
+    var profilePlayerId by mutableIntStateOf(-1)
     fun bump() { tick++ }
 
     // App-level scope: NOT tied to any screen. The loading screen replaces the screen that
@@ -86,6 +87,14 @@ fun Root() {
         Mode.NEWGAME -> NewGameScreen()
         Mode.GAME -> if (w != null) GameShell(w, tick)
         Mode.MATCH -> if (w != null) MatchScreen(w)
+    }
+    // Player profile reachable from any screen (long-press or tap a name). View-only during a match.
+    val profileId = App.profilePlayerId
+    if (w != null && profileId >= 0) {
+        val pp = w.players[profileId]
+        if (pp != null) {
+            PlayerDialog(w, pp, { App.profilePlayerId = -1 }, App.mode == Mode.MATCH) { App.bump() }
+        }
     }
 }
 

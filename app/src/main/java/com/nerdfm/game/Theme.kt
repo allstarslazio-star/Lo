@@ -15,7 +15,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 
 object C {
     val bg = Color(0xFF080A08)
@@ -117,6 +119,17 @@ fun ovrColor(v: Int): Color = when {
 fun Cell(text: String, w: Int, color: Color = C.text, bold: Boolean = false) {
     T(text, 12, color, bold, Modifier.width(w.dp))
 }
+
+/** Like [Cell] but tapping the name opens the player's profile. */
+@Composable
+fun PlayerCell(p: Player, w: Int, color: Color = C.text, bold: Boolean = false) {
+    T(p.name, 12, color, bold, Modifier.width(w.dp).clickable { App.profilePlayerId = p.id })
+}
+
+/** Tap keeps the row's own action; long-press opens the player's profile. */
+@OptIn(ExperimentalFoundationApi::class)
+fun Modifier.tapOrProfile(p: Player?, onTap: () -> Unit): Modifier =
+    combinedClickable(onClick = onTap, onLongClick = { if (p != null) App.profilePlayerId = p.id })
 
 // ---- star ratings (0..5, half-star steps)
 

@@ -150,7 +150,7 @@ fun HeadCell(label: String, w: Int, key: String, cur: String, onSort: (String) -
 // ------------------------------------------------------------------ player dialog
 
 @Composable
-fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit) {
+fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, readOnly: Boolean = false, onChanged: () -> Unit) {
     val me = w.human()
     val own = p.clubId == me.id
     var step by remember { mutableStateOf("view") }
@@ -214,7 +214,9 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
                         if (p.suspWeeks > 0) T("Suspended (${p.suspWeeks})", 12, C.red)
                         if (!isKnown(w, p)) T("Not scouted: attributes are estimates.", 11, C.amber, lines = 2)
                         Spacer(Modifier.height(8.dp))
-                        if (own) {
+                        if (readOnly) {
+                            T("View only during a match.", 11, C.muted)
+                        } else if (own) {
                             Btn("Renew contract", modifier = Modifier.fillMaxWidth()) { step = "renew"; msg = "" }
                             Spacer(Modifier.height(4.dp))
                             Btn(if (p.listed) "Remove from transfer list" else "List for transfer", modifier = Modifier.fillMaxWidth()) {

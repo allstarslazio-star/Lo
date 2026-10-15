@@ -151,7 +151,7 @@ fun MatchScreen(w: World) {
                 for (ps in mine.onPitch) {
                     Row {
                         Cell(ps.slot.label, 30, C.muted)
-                        Cell(ps.p.name, 112, if (ps.injured) C.red else C.text)
+                        PlayerCell(ps.p, 112, if (ps.injured) C.red else C.text)
                         Cell("${ps.cond.roundToInt()}%", 38, if (ps.cond < 60f) C.amber else C.muted)
                         Cell("%.1f".format(ps.rating.coerceIn(3f, 10f)), 30, C.text, true)
                     }
@@ -172,7 +172,7 @@ fun MatchScreen(w: World) {
                         T("Off", 12, C.muted, true)
                         for (ps in mine.onPitch) {
                             Box(Modifier.fillMaxWidth().background(if (outSel === ps) C.accent.copy(alpha = 0.3f) else Color.Transparent)
-                                .clickable { outSel = ps }.padding(4.dp)) {
+                                .tapOrProfile(ps.p) { outSel = ps }.padding(4.dp)) {
                                 T("${ps.slot.label} ${ps.p.name} ${ps.cond.roundToInt()}%", 12)
                             }
                         }
@@ -181,7 +181,7 @@ fun MatchScreen(w: World) {
                         T("On", 12, C.muted, true)
                         for (ps in mine.bench) {
                             Box(Modifier.fillMaxWidth().background(if (inSel === ps) C.accent.copy(alpha = 0.3f) else Color.Transparent)
-                                .clickable { inSel = ps }.padding(4.dp)) {
+                                .tapOrProfile(ps.p) { inSel = ps }.padding(4.dp)) {
                                 T("${ps.p.pos.label} ${ps.p.name} (${ps.p.ovr}) · ${"%.1f".format(ps.rating.coerceIn(3f, 10f))}", 12)
                             }
                         }
