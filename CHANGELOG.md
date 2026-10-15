@@ -27,3 +27,8 @@
 - Added one-off signing/renewal bonus negotiation alongside the existing weekly wage and 1–5 year contract terms. Bonuses are checked against available balance and deducted only when the deal succeeds; wage-budget enforcement remains intact.
 - Player interest now has Interested / Undecided / Not interested states with an explanation in contract talks. Offer rejection and completed sales continue to remove offers immediately.
 - Added focused interest-state tests. **NOT VERIFIED:** Gradle/JUnit/Android compilation not run. Reference informed: `05-wishlist.md` (real negotiation and visible interest); no external reference implementation copied.
+
+## Phase 7 — scouting interest leads to bids
+
+- Player records now persist the interested club and a 1–3 week countdown. When the countdown expires during a transfer window, the named club can submit a real bid and news identifies it as following up on scouting. Ordinary random bids are skipped while the player has a pending scouting interest.
+- Player profile displays the interested club and expected timing. Added a focused countdown/state test. **NOT VERIFIED:** Gradle/JUnit/Android compilation not run. Reference informed: `05-wishlist.md` and `03-phase-plan.md` (scouting news should lead to bids).

@@ -196,6 +196,10 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
                         T("Fitness ${p.condition.roundToInt()}%  Sharpness ${p.sharpness.roundToInt()}%", 12, if (p.condition < 65f || p.sharpness < 50f) C.amber else C.muted, lines = 2)
                         T("Morale ${p.morale.roundToInt()}  Form ${p.form.roundToInt()}", 12, C.muted)
                         T("Value ${money(p.value())}  |  Wage demand ${money(p.wageDemand().toLong())}/wk", 12)
+                        if (own && p.scoutInterestClubId >= 0 && p.scoutInterestWeeks > 0) {
+                            val scoutClub = w.clubs.getOrNull(p.scoutInterestClubId)
+                            if (scoutClub != null) T("Scouting interest: ${scoutClub.name} · expected bid in ${p.scoutInterestWeeks} week(s)", 12, C.amber, lines = 2)
+                        }
                         T("Career: ${p.apps} apps  |  ${p.goals} goals  |  ${p.assists} assists  |  ${p.minutes} minutes", 12, C.muted, lines = 2)
                         if (p.apps > 0) T("Average rating ${"%.2f".format(p.avgRating())} / 10", 12, C.accent)
                         T("Career performance", 13, C.accent, true)

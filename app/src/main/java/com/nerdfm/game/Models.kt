@@ -196,6 +196,9 @@ class Player(
     var suspWeeks = 0
     var yellows = 0
     var listed = false
+    /** Persisted external scouting interest; zero weeks means no pending bid expectation. */
+    var scoutInterestClubId = -1
+    var scoutInterestWeeks = 0
     var ovr = 0
     var apps = 0
     var goals = 0

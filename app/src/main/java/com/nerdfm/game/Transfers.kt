@@ -179,21 +179,38 @@ object Transfers {
         if (!w.isWindowOpen()) return
         val me = w.human()
         val squad = w.squad(me).sortedByDescending { it.ovr }
-        // Occasionally surface realistic scouting interest before a formal bid arrives.
+        // Previously reported interest matures into a bid after 1–3 weekly ticks.
+        for (p in squad) {
+            if (p.scoutInterestClubId >= 0 && p.scoutInterestWeeks > 0) {
+                p.scoutInterestWeeks--
+                if (p.scoutInterestWeeks == 0 && !w.offers.any { it.playerId == p.id }) {
+                    val buyer = w.clubs.getOrNull(p.scoutInterestClubId)
+                    if (buyer != null && buyer.transferBudget >= p.value() / 2 && buyer.balance >= p.value() / 2) {
+                        val fee = (p.value() * (if (p.listed) 0.9 else 0.8)).toLong()
+                        w.offers.add(Offer(p.id, buyer.id, fee, w.week + 2))
+                        w.addNews("Transfer offer", "${buyer.name} followed up its scouting of ${p.name} with a ${money(fee)} bid.")
+                    }
+                    p.scoutInterestClubId = -1
+                }
+            }
+        }
+        // Record real interest against a named club and player, not just a one-off news item.
         if (squad.isNotEmpty() && rnd.nextDouble() < 0.22) {
-            val watched = squad.filter { !w.offers.any { offer -> offer.playerId == it.id } }.randomOrNull(rnd)
+            val watched = squad.filter { !w.offers.any { offer -> offer.playerId == it.id } && it.scoutInterestWeeks == 0 }.randomOrNull(rnd)
             if (watched != null) {
                 val interestedClubs = w.clubs.filter { c -> !c.human && c.id != watched.clubId && c.rep >= me.rep - 5 && c.transferBudget >= watched.value() * 0.8 }
                 if (interestedClubs.isNotEmpty()) {
                     val scoutClub = interestedClubs[rnd.nextInt(interestedClubs.size)]
-                    w.addNews("Scouting interest", "${scoutClub.name} have been monitoring ${watched.name}. No formal bid has been made yet.")
+                    watched.scoutInterestClubId = scoutClub.id
+                    watched.scoutInterestWeeks = rnd.nextInt(1, 4)
+                    w.addNews("Scouting interest", "${scoutClub.name} are monitoring ${watched.name}. A bid may follow in ${watched.scoutInterestWeeks} week(s).")
                 }
             }
         }
         for ((i, p) in squad.withIndex()) {
             val pr = if (p.listed) 0.35 else if (i < 12) 0.04 else 0.015
             if (rnd.nextDouble() > pr) continue
-            if (w.offers.any { it.playerId == p.id }) continue
+            if (w.offers.any { it.playerId == p.id } || p.scoutInterestWeeks > 0) continue
             val cands = w.clubs.filter { c ->
                 !c.human && c.tier <= me.tier + 1 && c.rep >= me.rep - 15 && c.transferBudget > p.value() * 0.7
             }
