@@ -32,3 +32,8 @@
 
 - Player records now persist the interested club and a 1–3 week countdown. When the countdown expires during a transfer window, the named club can submit a real bid and news identifies it as following up on scouting. Ordinary random bids are skipped while the player has a pending scouting interest.
 - Player profile displays the interested club and expected timing. Added a focused countdown/state test. **NOT VERIFIED:** Gradle/JUnit/Android compilation not run. Reference informed: `05-wishlist.md` and `03-phase-plan.md` (scouting news should lead to bids).
+
+## Phase 8 — squad and player presentation
+
+- Live match substitution bench now displays the match rating (same clamped 3.0–10.0 presentation as the pitch) rather than overall ability. Player profiles show value, wage, stats, form trend (improving/declining/steady), and persisted scouting interest where applicable. Existing squad and transfer player rows already open the detailed player dialog when tapped; those paths are retained.
+- Added a focused form-trend presentation test. **NOT VERIFIED:** Gradle/JUnit/Android compilation not run. Reference informed: `05-wishlist.md` (bench ratings, player profiles, value and development indicator).

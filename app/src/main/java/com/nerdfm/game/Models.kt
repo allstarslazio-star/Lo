@@ -225,6 +225,12 @@ class Player(
 
     fun avgRating(): Float = if (apps == 0) 0f else ratingSum / apps
 
+    fun performanceTrend(): String = when {
+        form >= 65f -> "↑ Improving"
+        form <= 55f -> "↓ Declining"
+        else -> "→ Steady"
+    }
+
     fun value(): Long {
         val eff: Double = if (age <= 23) ovr * 0.65 + max(pa, ovr) * 0.35 else ovr.toDouble()
         var v = 400000.0 * exp((eff - 40.0) * 0.115)

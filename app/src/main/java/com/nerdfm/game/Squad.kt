@@ -194,7 +194,7 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
                         T("Overall ${shownOvr(w, p)}" + (if (!isKnown(w, p)) " (est.)" else ""), 16, ovrColor(shownOvr(w, p)), true)
                         T("Potential ${potText(w, p)} stars", 12)
                         T("Fitness ${p.condition.roundToInt()}%  Sharpness ${p.sharpness.roundToInt()}%", 12, if (p.condition < 65f || p.sharpness < 50f) C.amber else C.muted, lines = 2)
-                        T("Morale ${p.morale.roundToInt()}  Form ${p.form.roundToInt()}", 12, C.muted)
+                        T("Morale ${p.morale.roundToInt()}  Form ${p.form.roundToInt()}% · ${p.performanceTrend()}", 12, when { p.form >= 65f -> C.green; p.form <= 55f -> C.red; else -> C.muted }, lines = 2)
                         T("Value ${money(p.value())}  |  Wage demand ${money(p.wageDemand().toLong())}/wk", 12)
                         if (own && p.scoutInterestClubId >= 0 && p.scoutInterestWeeks > 0) {
                             val scoutClub = w.clubs.getOrNull(p.scoutInterestClubId)
