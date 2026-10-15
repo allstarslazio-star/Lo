@@ -98,6 +98,19 @@ class World : Serializable {
         return null
     }
 
+    /** Board-approved weekly wage-cap bounds, scaled to annual revenue. */
+    fun wageBudgetLimits(c: Club): LongRange {
+        val weeklyRevenue = (c.revenue / 52L).coerceAtLeast(1_000L)
+        val financialFactor = when {
+            c.balance < 0L -> 0.55
+            c.balance > c.revenue -> 0.90
+            else -> 0.80
+        }
+        val minimum = (weeklyRevenue * 0.35).toLong().coerceAtLeast(1_000L)
+        val maximum = (weeklyRevenue * financialFactor).toLong().coerceAtLeast(minimum)
+        return minimum..maximum
+    }
+
     fun wageBill(c: Club): Long {
         var s = 0L
         for (id in c.players) s += players[id]!!.wage

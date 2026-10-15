@@ -243,13 +243,17 @@ fun FinanceScreen(w: World) {
                     modifier = Modifier.weight(1f)
                 )
                 Btn("Set cap", enabled = wageCapText.toLongOrNull() != null && wageCapText.toLongOrNull()!! >= 1_000L) {
-                    val cap = wageCapText.toLongOrNull()!!.coerceAtMost(1_000_000_000L)
+                    val limits = w.wageBudgetLimits(me)
+                    val requested = wageCapText.toLongOrNull()!!
+                    val cap = requested.coerceIn(limits.first, limits.last)
                     me.wageBudget = cap
-                    msg = "Weekly wage cap set to ${money(cap)}. The board may still react to overspending."
+                    msg = if (cap != requested) "Finances allow ${money(limits.first)}–${money(limits.last)}/wk; cap adjusted to ${money(cap)}." else "Weekly wage cap set to ${money(cap)}. The board may still react to overspending."
                     tick++; App.bump()
                 }
             }
-            T("You can raise the cap when the club's finances allow it. This changes the board's wage limit, not the actual wage bill.", 11, C.muted, lines = 3)
+            val wageLimits = w.wageBudgetLimits(me)
+            T("Financial limits: ${money(wageLimits.first)}–${money(wageLimits.last)} per week. Raising the cap requires sufficient club finances; this changes the board's limit, not actual wages.", 11, C.muted, lines = 3)
+            if (bill > me.wageBudget) T("Board warning: wage bill exceeds the approved budget. Confidence will fall until spending is controlled.", 12, C.red, lines = 2)
             Spacer(Modifier.height(6.dp))
             T("Last week: income ${money(me.weeklyIncome)}, spend ${money(me.weeklyExpense)}", 12, C.muted, lines = 2)
             T("Season start balance: " + money(me.seasonStartBalance), 12, C.muted)

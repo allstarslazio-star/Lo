@@ -205,7 +205,12 @@ object Game {
         }
         // board pressure
         val bill = w.wageBill(me)
-        if (bill > me.wageBudget) me.boardConfidence = max(0f, me.boardConfidence - 0.3f)
+        if (bill > me.wageBudget) {
+            me.boardConfidence = max(0f, me.boardConfidence - 0.3f)
+            if (w.news.none { it.title == "Wage budget warning" && it.year == w.year && it.week == w.week }) {
+                w.addNews("Wage budget warning", "Your weekly wage bill ${money(bill)} exceeds the approved budget ${money(me.wageBudget)}. The board expects action.")
+            }
+        }
         if (me.balance < 0) me.boardConfidence = max(0f, me.boardConfidence - 0.5f)
         if (me.autoPick) Lineups.autoPick(w, me) else Lineups.fixHuman(w, me)
         if (w.week >= 8 && me.boardConfidence <= 8f) {

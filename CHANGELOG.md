@@ -37,3 +37,8 @@
 
 - Live match substitution bench now displays the match rating (same clamped 3.0–10.0 presentation as the pitch) rather than overall ability. Player profiles show value, wage, stats, form trend (improving/declining/steady), and persisted scouting interest where applicable. Existing squad and transfer player rows already open the detailed player dialog when tapped; those paths are retained.
 - Added a focused form-trend presentation test. **NOT VERIFIED:** Gradle/JUnit/Android compilation not run. Reference informed: `05-wishlist.md` (bench ratings, player profiles, value and development indicator).
+
+## Phase 9 — financially bounded wage budget
+
+- The Finance screen now clamps requested weekly wage caps to a revenue/balance-based board range, explains when a requested cap is adjusted, and displays an explicit overspend warning. Weekly processing also emits a deduplicated board-news warning while wages exceed budget; the existing confidence penalty remains.
+- Added tests for positive, ordered bounds and tighter limits when the club is in deficit. **NOT VERIFIED:** Gradle/JUnit/Android compilation not run. Reference informed: `05-wishlist.md` (adjust wage cap when finances allow; warn board when over budget).
