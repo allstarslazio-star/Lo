@@ -42,19 +42,25 @@ class PersistenceTest {
         assertTrue(Persistence.load(temp.newFolder("missing")) is LoadResult.NoSave)
     }
 
-    @Test fun lowerSaveVersionIsIncompatibleAndMovedToFailedLoadBackup() {
-        val directory = temp.newFolder("old-version")
-        val oldWorld = World().apply { saveVersion = Persistence.CURRENT_SAVE_VERSION - 1 }
+    @Test fun versionOneSaveMigratesToCurrentFormatAndPreservesCareerProgress() {
+        val directory = temp.newFolder("version-one-migration")
+        val oldWorld = World().apply { saveVersion = 1; year = 2032; week = 19; manager = "Old Career" }
         writeCompressedObject(File(directory, "career1.dat"), oldWorld)
 
         val result = Persistence.load(directory)
 
-        assertTrue(result is LoadResult.Incompatible)
-        val backupName = (result as LoadResult.Incompatible).backupFileName
-        assertNotNull(backupName)
-        assertTrue(File(directory, backupName!!).isFile)
-        assertFalse(File(directory, "career1.dat").exists())
-        assertFalse(File(directory, "career1.bak").exists())
+        assertTrue(result is LoadResult.Loaded)
+        val migrated = (result as LoadResult.Loaded).world
+        assertEquals(Persistence.CURRENT_SAVE_VERSION, migrated.saveVersion)
+        assertEquals(2032, migrated.year)
+        assertEquals(19, migrated.week)
+        assertEquals("Old Career", migrated.manager)
+    }
+
+    @Test fun unknownOlderSaveVersionRemainsIncompatible() {
+        val directory = temp.newFolder("unknown-old-version")
+        writeCompressedObject(File(directory, "career1.dat"), World().apply { saveVersion = 0 })
+        assertTrue(Persistence.load(directory) is LoadResult.Incompatible)
     }
 
 

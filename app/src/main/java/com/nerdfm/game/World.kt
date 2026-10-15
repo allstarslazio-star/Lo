@@ -60,15 +60,32 @@ class World : Serializable {
 
     /** A readable weekly career date; week 0 is pre-season. */
     fun dateLabel(): String {
-        val date = java.time.LocalDate.of(year, 7, 1).plusDays((week.coerceAtLeast(0) * 7L))
+        val date = careerDate()
         return date.format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy"))
     }
 
-    fun isWindowOpen(): Boolean = week in 0..4 || week in 18..21
+    /** Calendar date follows the existing weekly fixture cadence (week zero starts 1 July). */
+    fun careerDate(): java.time.LocalDate = java.time.LocalDate.of(year, 7, 1)
+        .plusDays(week.coerceAtLeast(0) * 7L)
+
+    fun isWindowOpen(): Boolean {
+        val date = careerDate()
+        return date.monthValue == 7 || date.monthValue == 8 || date.monthValue == 1
+    }
+
+    fun windowDaysRemaining(): Int {
+        val date = careerDate()
+        val end = when {
+            date.monthValue == 7 || date.monthValue == 8 -> java.time.LocalDate.of(date.year, 8, 31)
+            date.monthValue == 1 -> java.time.LocalDate.of(date.year, 1, 31)
+            else -> return 0
+        }
+        return if (date <= end && isWindowOpen()) java.time.temporal.ChronoUnit.DAYS.between(date, end).toInt() else 0
+    }
 
     fun windowText(): String = when {
-        week in 0..4 -> "Summer window open"
-        week in 18..21 -> "Winter window open"
+        isWindowOpen() && careerDate().monthValue in 7..8 -> "Summer window open · ${windowDaysRemaining()} days left"
+        isWindowOpen() && careerDate().monthValue == 1 -> "Winter window open · ${windowDaysRemaining()} days left"
         else -> "Window closed"
     }
 

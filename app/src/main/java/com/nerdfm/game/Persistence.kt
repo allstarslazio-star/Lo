@@ -23,7 +23,7 @@ sealed class LoadResult {
 
 /** File-based by design so persistence can be exercised by local JVM unit tests. */
 object Persistence {
-    const val CURRENT_SAVE_VERSION: Int = 1
+    const val CURRENT_SAVE_VERSION: Int = 2
     private const val SAVE_NAME = "career1.dat"
     private const val TEMP_NAME = "career1.tmp"
     private const val BACKUP_NAME = "career1.bak"
@@ -127,7 +127,11 @@ object Persistence {
                     "The save contains ${value?.javaClass?.simpleName ?: "no World object"}, not a World."
                 )
             }
-            if (world.saveVersion != CURRENT_SAVE_VERSION) {
+            if (world.saveVersion == 1) {
+                // Version 1 used week-indexed transfer windows. New calendar dates are derived
+                // from year/week, so no stored career progress is discarded by this migration.
+                world.saveVersion = CURRENT_SAVE_VERSION
+            } else if (world.saveVersion != CURRENT_SAVE_VERSION) {
                 return LoadResult.Incompatible(
                     "Save format ${world.saveVersion} is not supported; this game requires format $CURRENT_SAVE_VERSION."
                 )

@@ -183,6 +183,11 @@ object Game {
             c.weeklyIncome += base
             c.weeklyExpense = wages + upkeep
         }
+        // Calendar-based transfer-window reminders; weekly fixtures remain unchanged.
+        if (w.isWindowOpen() && w.windowDaysRemaining() in 1..7 &&
+            w.news.none { it.title == "Transfer deadline approaching" && it.year == w.year && it.week == w.week }) {
+            w.addNews("Transfer deadline approaching", "${w.windowText()}. Finalise outstanding deals before the window closes.")
+        }
         // offers
         w.offers.removeAll { it.expiresWeek < w.week || w.players[it.playerId]?.clubId != w.humanClubId }
         scoutingTick(w, rnd)

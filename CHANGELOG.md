@@ -15,3 +15,9 @@
 - Added CI log streaming, failure-line extraction, realism-report printing, and build-log/report artifacts. **Workflow behavior: NOT VERIFIED (CI not run here).**
 - Targets are user-supplied: goals/match 2.75 (1,045/380), draw rate 27.4% (104/380), decisive matches 72.6%, yellow cards/match 4.05 (single secondary source, koppafootball.com), red cards/match 0.126 (single secondary source, koppafootball.com); home/away win targets UNVERIFIED. Target values were not independently checked.
 - No match-engine constants or match outcome logic were changed. **VERIFIED by diff inspection.**
+
+## Phase 5 — calendar transfer windows and save migration
+
+- Save-format bump plan: advance `World.saveVersion` via `Persistence.CURRENT_SAVE_VERSION` from 1 to 2; accept version-1 serialized `World` instances and migrate their version marker to 2 on load. New calendar values are derived from the existing `year`/`week`, so the migration preserves career progress and weekly fixture scheduling. Unknown versions remain incompatible. This plan and implementation are committed together.
+- Transfer windows now use the calendar date derived from the existing weekly career clock: summer July–August and winter January; UI text includes days remaining and weekly processing can emit a deadline reminder. Match weeks/fixtures are unchanged.
+- Added old-save migration and unsupported-version persistence tests. **NOT VERIFIED:** Gradle/JUnit/Android compilation cannot be run in this environment. Reference informed: handoff `03-phase-plan.md` (day-based dates, deadline warning, retain weekly schedule); no external real-world calendar source fetched.
