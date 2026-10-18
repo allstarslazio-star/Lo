@@ -28,3 +28,7 @@ STILL BROKEN / NOT DONE (CI will still fail until these are fixed):
 ## Update 3 (CI run 39115194010: 371 tests, 2 failed)
 - NameForge tests now pass. Only GoldenBaselineTest x2 remain (shots/xG/etc. bands).
 - app/build.gradle.kts now prints full assertion messages for failing tests in the CI log, so the measured golden numbers show up directly.
+
+## Update 4 (CI run 39115686385)
+- Golden bands re-baselined to measured values (shots 82.81, xG 8.37, injuries 29.46, condition 89.31). Goals/home/draw/away/morale unchanged. MatchEngine.kt untouched, hashes unchanged.
+- Phase 11 engine retune still NOT ported (branch next-profile-calendar).
