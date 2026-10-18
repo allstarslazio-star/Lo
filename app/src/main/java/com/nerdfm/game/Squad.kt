@@ -27,7 +27,7 @@ import kotlin.math.roundToInt
 
 fun isKnown(w: World, p: Player): Boolean = p.clubId == w.humanClubId || w.scouted.contains(p.id)
 
-fun scoutErr(w: World): Float = (20 - w.human().scout) / 10f
+fun scoutErr(w: World): Float = Analytics.scoutError(w)
 
 fun shownAttr(w: World, p: Player, i: Int): Int {
     if (isKnown(w, p)) return p.attrs[i]

@@ -53,6 +53,8 @@ class EcosystemState : Serializable {
     var env: EnvState? = null
     /** M6: cups, continental competition, international windows, travel. */
     var calendar: CalendarState? = null
+    /** M3: data plan and analytics settings. */
+    var analytics: AnalyticsState? = null
 }
 
 /**
@@ -65,7 +67,7 @@ object Ecosystem {
     @Volatile var enabled = true
 
     /** Registration point. Milestones M1..M7 add their providers here; tests swap the list via [withProviders]. */
-    @Volatile internal var providers: List<FactorProvider> = listOf(StaffFactors, BoardFactors, CultureFactors, PeopleFactors, EnvFactors, CalendarFactors, RefereeFactors)
+    @Volatile internal var providers: List<FactorProvider> = listOf(StaffFactors, BoardFactors, CultureFactors, PeopleFactors, EnvFactors, CalendarFactors, RefereeFactors, AnalyticsFactors)
 
     /** Per-player providers (M2 onwards). */
     @Volatile internal var playerProviders: List<PlayerFactorProvider> = listOf(MedicalLoadFactors)
@@ -125,6 +127,7 @@ object Ecosystem {
         MedicalRules.prune(w)
         People.prune(w)
         ClubEnvRules.prune(w)
+        Analytics.prune(w)
     }
 
     /** Start of the season rollover, tables still intact. */

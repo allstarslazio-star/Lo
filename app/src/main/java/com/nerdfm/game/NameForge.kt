@@ -60,7 +60,7 @@ object NameForge {
         "Valdoria" to Flavour(
             l("Giuseppe Antonio Carlo Franco Mario Paolo Bruno Gianni Piero Vittorio Salvo Lorenzo Renato Aurelio Claudio Ettore Ignazio Silvio"),
             l("Giulia Chiara Sofia Elena Marta Lucia Federica Alessia Bianca Serena Ilaria Camilla Valentina Francesca Beatrice Silvia Noemi Paola Greta Elisa"),
-            l("Rossetti Bianchini Moretti Carbone Ferraro Bellini Gallo Conti Lombardi Marchetti Costa Fontana Santoro Barbieri Pellegrini Monti Ricci Sartori Vitale Orlandi Greco Caruso Neri Basile"),
+            l("Rossetti Bianchini Moretti Carbone Ferraro Bellini Gallo Conti Lombardi Marchetti Costa Fontana Santoro Barbieri Pellegrini Monti Ricci Sartori Vitale Orlandi Greco Caruso Neri Basile Ferrari Gentile Leone Mancini Palumbo Rinaldi Colombo Fabbri Serra Testa Longo Villa"),
             particles = l("di de"), particleChance = 0.04f),
         "Nordheim" to Flavour(
             l("Gunnar Harald Knut Arne Bjarne Torstein Halvor Einar Trygve Rolf Sigurd Odd Hakon Thor Gustav Birger Stig Vidar"),
@@ -158,7 +158,7 @@ object NameForge {
     private fun baseSurname(nat: Int, rnd: Random): String {
         val nd = Names.nations[Math.floorMod(nat, Names.nations.size)]
         val fl = flavour(nat)
-        return if (rnd.nextFloat() < 0.55f) pick(fl.surnames, rnd) else syllableSurname(nd, rnd)
+        return if (rnd.nextFloat() < 0.40f) pick(fl.surnames, rnd) else syllableSurname(nd, rnd)
     }
 
     private fun classicShare(age: Int): Float = when {
@@ -206,14 +206,17 @@ object NameForge {
         } else {
             surname = baseSurname(heritage, rnd)
         }
-        if (o.gender == Gender.FEMALE) {
-            for ((from, to) in hf.femaleEnd) if (surname.endsWith(from)) { surname = surname.dropLast(from.length) + to; break }
+        fun gendered(name: String): String {
+            if (o.gender != Gender.FEMALE) return name
+            for ((from, to) in hf.femaleEnd) if (name.endsWith(from)) return name.dropLast(from.length) + to
+            return name
         }
+        surname = gendered(surname)
         if (hf.doubleChance > 0f && rnd.nextFloat() < hf.doubleChance) {
-            val second = baseSurname(heritage, rnd)
+            val second = gendered(baseSurname(heritage, rnd))
             if (second != surname) { surname = "$surname $second"; pattern = "double" }
         } else if (hf.hyphenChance > 0f && rnd.nextFloat() < hf.hyphenChance) {
-            val second = baseSurname(heritage, rnd)
+            val second = gendered(baseSurname(heritage, rnd))
             if (second != surname) { surname = "$surname-$second"; pattern = "hyphen" }
         }
         if (hf.prefixes.isNotEmpty() && rnd.nextFloat() < hf.prefixChance) {

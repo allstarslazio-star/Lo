@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
-val NAV = listOf("Inbox", "Squad", "People", "Tactics", "Training", "Staff", "League", "Transfers", "Finance", "Business", "Ecosystem", "Club")
+val NAV = listOf("Home", "Inbox", "Squad", "Players", "People", "Tactics", "Training", "Staff", "League", "Transfers", "Finance", "Business", "Ecosystem", "Club", "Diagnostics")
 
 @Composable
 fun GameShell(w: World, tick: Int) {
@@ -86,6 +86,7 @@ fun GameShell(w: World, tick: Int) {
             } else if (w.week == 0) "Begin season" else "Advance"
             Btn(if (advancing) "Advancing…" else label, enabled = !advancing && App.busy.isEmpty()) { if (fx != null) confirm = true else runAdvance() }
         }
+        TutorialBanner()
         Row(Modifier.weight(1f)) {
             Column(Modifier.width(104.dp).fillMaxHeight().background(C.surface).verticalScroll(rememberScrollState()).padding(top = 4.dp)) {
                 for (n in NAV) {
@@ -101,7 +102,9 @@ fun GameShell(w: World, tick: Int) {
             }
             Box(Modifier.weight(1f).fillMaxHeight().padding(8.dp)) {
                 when (App.screen) {
+                    "Home" -> HomeScreen(w)
                     "Inbox" -> InboxScreen(w)
+                    "Players" -> PlayersScreen(w)
                     "Squad" -> SquadScreen(w)
                     "People" -> PeopleScreen(w)
                     "Tactics" -> TacticsScreen(w)
@@ -113,6 +116,7 @@ fun GameShell(w: World, tick: Int) {
                     "Business" -> BusinessScreen(w)
                     "Ecosystem" -> EcosystemScreen(w)
                     "Club" -> ClubScreen(w)
+                    "Diagnostics" -> DiagnosticsScreen(w)
                 }
             }
         }

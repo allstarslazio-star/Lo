@@ -200,7 +200,7 @@ object Game {
             val wages = w.wageBill(c)
             val upkeep = (c.revenue * 0.05 / 52.0 * (0.5 + c.facilities / 10.0)).toLong()
             val extra = Business.weeklyAdjustment(w, c, base)
-            val staffNet = Staffing.netWeeklyCost(w, c)
+            val staffNet = Staffing.netWeeklyCost(w, c) + Analytics.netWeeklyCost(w, c)
             c.balance += base + extra - wages - upkeep - staffNet
             c.weeklyIncome += base + max(0L, extra)
             c.weeklyExpense = wages + upkeep + staffNet

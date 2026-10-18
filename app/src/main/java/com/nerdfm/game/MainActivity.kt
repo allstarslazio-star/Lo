@@ -1,5 +1,6 @@
 package com.nerdfm.game
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -20,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 enum class Mode { MENU, NEWGAME, GAME, MATCH }
 
@@ -32,6 +34,40 @@ object App {
     var pendingFixture by mutableStateOf<Fixture?>(null)
     var engine by mutableStateOf<MatchEngine?>(null)
     fun bump() { tick++ }
+
+    // ---- M7/M8 glue: navigation, notifications, tutorial and diagnostics state used by HomeUi / DiagnosticsUi / PlayerBrowserUi ----
+    /** Player the Players screen should open on arrival; consumed (reset to null) by PlayersScreen. */
+    var focusPlayerId by mutableStateOf<Int?>(null)
+    /** Bumped whenever the tutorial changes so TutorialBanner recomposes (TutorialState itself is not observable). */
+    var tutorialTick by mutableIntStateOf(0)
+    /** Last integrity-audit summary shown on the Diagnostics screen. */
+    var diagnosticsText by mutableStateOf("")
+    val notices = NotificationCenter()
+    /** In-memory until MainActivity calls [initSettings]; the tutorial then persists to a file in filesDir. */
+    var tutorial: TutorialState = TutorialState(MemorySettingsStore())
+        private set
+
+    val deviceLabel: String
+        get() = "${Build.MANUFACTURER} ${Build.MODEL} | Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
+
+    fun initSettings(dir: File) {
+        tutorial = TutorialState(FileSettingsStore(File(dir, "settings.properties")))
+        tutorialTick++
+    }
+
+    /** Switch management screen. Unknown screens are ignored so a stale notice can never blank the shell. */
+    fun navigate(screen: String) {
+        if (screen !in NAV) return
+        this.screen = screen
+        mode = Mode.GAME
+        bump()
+    }
+
+    fun navigate(target: NavTarget) {
+        if (target.screen !in NAV) return
+        focusPlayerId = if (target.screen == Destination.PLAYERS.screen) target.playerId else null
+        navigate(target.screen)
+    }
 
     // App-level scope: NOT tied to any screen. The loading screen replaces the screen that
     // started the job, which used to cancel the job's scope and leave "busy" stuck forever.
@@ -48,6 +84,7 @@ object App {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        App.initSettings(filesDir)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val ctl = WindowInsetsControllerCompat(window, window.decorView)
         ctl.hide(WindowInsetsCompat.Type.systemBars())

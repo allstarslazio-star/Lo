@@ -25,9 +25,9 @@ sealed class LoadResult {
 /** File-based by design so persistence can be exercised by local JVM unit tests. */
 object Persistence {
     const val CURRENT_SAVE_VERSION: Int = 10
-    private const val SAVE_NAME = "career1.dat"
+    internal const val SAVE_NAME = "career1.dat"
     private const val TEMP_NAME = "career1.tmp"
-    private const val BACKUP_NAME = "career1.bak"
+    internal const val BACKUP_NAME = "career1.bak"
     private const val FAILED_BACKUP_NAME = "career1.failed-load.bak"
 
     /** Duration of the most recent temporary-save read-back verification. */
@@ -84,14 +84,28 @@ object Persistence {
      */
     @Synchronized
     fun save(directory: File, world: World): Boolean {
+        val bytes = try { snapshot(world) } catch (_: Exception) { return false }
+        return saveSnapshot(directory, bytes)
+    }
+
+    /** Serialises [world] to the compressed on-disk format. Callers that share the world must hold its lock while this runs. */
+    fun snapshot(world: World): ByteArray {
+        world.saveVersion = CURRENT_SAVE_VERSION
+        val out = java.io.ByteArrayOutputStream()
+        ObjectOutputStream(GZIPOutputStream(out)).use { it.writeObject(world) }
+        return out.toByteArray()
+    }
+
+    /** Writes already-serialised bytes with the verified-temp protocol (see [save]). Returns false if anything fails. */
+    @Synchronized
+    fun saveSnapshot(directory: File, bytes: ByteArray): Boolean {
         val saveStart = System.nanoTime()
         val temp = File(directory, TEMP_NAME)
         return try {
             if (!directory.exists() && !directory.mkdirs()) return false
-            world.saveVersion = CURRENT_SAVE_VERSION
             if (temp.exists() && !temp.delete()) return false
 
-            ObjectOutputStream(GZIPOutputStream(FileOutputStream(temp))).use { it.writeObject(world) }
+            FileOutputStream(temp).use { it.write(bytes) }
 
             val verificationStart = System.nanoTime()
             val verification = try {
@@ -145,7 +159,7 @@ object Persistence {
         return file.renameTo(destination)
     }
 
-    private fun readFile(file: File): LoadResult {
+    internal fun readFile(file: File): LoadResult {
         return try {
             val world = ObjectInputStream(GZIPInputStream(FileInputStream(file))).use { input ->
                 val value = input.readObject()
@@ -158,9 +172,11 @@ object Persistence {
                     "Save format ${world.saveVersion} is not supported; this game requires format $CURRENT_SAVE_VERSION or a supported older version."
                 )
             }
-            migrateSave(world)
+            SaveMigrations.migrate(world)
             normalizeAfterLoad(world)
             LoadResult.Loaded(world)
+        } catch (e: MigrationFailedException) {
+            LoadResult.Unreadable("The save could not be upgraded safely: ${e.message ?: "migration failed"}. The file was left untouched.")
         } catch (e: InvalidClassException) {
             LoadResult.Incompatible("A saved class is incompatible with this build: ${e.message ?: e.javaClass.simpleName}.")
         } catch (e: ClassNotFoundException) {
@@ -174,54 +190,6 @@ object Persistence {
         } catch (e: Exception) {
             LoadResult.Unreadable("The save could not be read safely: ${e.message ?: e.javaClass.simpleName}. The file was left untouched.")
         }
-    }
-
-    /** Migrates compatible Java-serialized saves in memory, one format step at a time. */
-    private fun migrateSave(world: World) {
-        if (world.saveVersion == 1) {
-            // Format 2 adds relationship state (M3).
-            world.managerReputation = 50f
-            for (club in world.clubs) {
-                club.teamCohesion = 55f
-                club.boardObjective = club.boardObjective.coerceIn(0, 4)
-            }
-            for (player in world.players.values) {
-                player.playingTimePromise = 0
-                player.promiseWeeksRemaining = 0
-                player.promiseBrokenWeeks = 0
-            }
-            world.saveVersion = 2
-        }
-        if (world.saveVersion == 2) {
-            // Format 3 adds the business layer (sponsors, clauses, loans, scouts); it is created lazily.
-            world.saveVersion = 3
-        }
-        if (world.saveVersion == 3) {
-            // Format 4 adds the Club Ecosystem holder (World.ecosystem); it is created lazily by World.eco().
-            world.saveVersion = 4
-        }
-        if (world.saveVersion == 4) {
-            // Format 5 adds staff, board and club identity sections inside EcosystemState; each is created lazily.
-            world.saveVersion = 5
-        }
-        if (world.saveVersion == 5) {
-            // Format 6 adds the medical section (workloads, injury history, rehab policy); it is created lazily.
-            world.saveVersion = 6
-        }
-        if (world.saveVersion == 6 || world.saveVersion == 7) {
-            // Format 7 is reserved for the unfinished analytics milestone (M3). Format 8 adds the people section
-            // (languages, culture, relationships, events); it is created lazily and absent in older saves.
-            world.saveVersion = 8
-        }
-        if (world.saveVersion == 8) {
-            // Format 9 adds fans, stadium, pitch, facilities and media (EnvState); created lazily.
-            world.saveVersion = 9
-        }
-        if (world.saveVersion == 9) {
-            // Format 10 adds the fixture calendar (cups, continental competition, international windows); created lazily.
-            world.saveVersion = 10
-        }
-        world.saveVersion = CURRENT_SAVE_VERSION
     }
 
     /** Repairs only absent optional learning/AI state; existing state is never reset. */
@@ -240,6 +208,7 @@ object Persistence {
         People.repair(world)
         ClubEnvRules.repair(world)
         FixtureCalendar.repair(world)
+        Analytics.repair(world)
     }
 
     private fun archiveBeforeOverwrite(directory: File, current: File): Boolean {

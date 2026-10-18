@@ -72,6 +72,8 @@ fun BoardTab(w: World, refresh: () -> Unit) {
                 if (p == null) { T("A recommended player is no longer on the market.", 11, C.muted); continue }
                 T(p.name + " (" + p.pos.name + ", age " + p.age + ")", 12, C.text, true)
                 T(sg.reason, 11, C.muted, lines = 3)
+                val ap = Analytics.modelApproval(w, p)
+                T("Data model: " + (if (ap > 0) "approves (rated about " + Analytics.modelRating(w, p) + ")" else if (ap == 0) "neutral" else "does not rate him at your level"), 11, if (ap > 0) C.green else if (ap < 0) C.amber else C.muted, lines = 2)
                 val wage = Transfers.wantedWage(me, p)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Btn("Sign (" + money(wage.toLong()) + " / wk)", p.clubId == -1) { msg = BoardRules.acceptSuggestion(w, sg.id).second; refresh() }

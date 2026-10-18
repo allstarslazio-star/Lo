@@ -112,7 +112,7 @@ object ScoutingNetwork {
                 if (other.pa > pick.pa) pick = other
             }
             val before = b.knowledge[pick.id] ?: 0
-            val after = min(100, before + 18 + s.ability * 2 + me.scout)
+            val after = min(100, before + 18 + s.ability * 2 + me.scout + Analytics.scoutingBonus(w))
             b.knowledge[pick.id] = after
             if (after >= 100 && !w.scouted.contains(pick.id)) {
                 w.scouted.add(pick.id)
@@ -123,7 +123,7 @@ object ScoutingNetwork {
     }
 
     private fun writeReport(w: World, me: Club, b: BusinessState, s: Scout, p: Player, rnd: Random) {
-        val err = max(0, (20 - s.judgement) / 5)
+        val err = Analytics.reportError(w, s.judgement)
         val seenOvr = p.ovr + (if (err > 0) rnd.nextInt(2 * err + 1) - err else 0)
         val seenPa = p.pa + (if (err > 0) rnd.nextInt(2 * err + 1) - err else 0)
         val strength = Lineups.strength(w, me)
@@ -133,7 +133,7 @@ object ScoutingNetwork {
             else -> "Recommend: pass"
         }
         val where = if (p.clubId >= 0) w.clubs[p.clubId].name else "free agent"
-        val text = "${p.name} (${p.pos.label}, age ${p.age}, $where): about $seenOvr now, potential about ${seenPa / 20f} stars. $advice."
+        val text = "${p.name} (${p.pos.label}, age ${p.age}, $where): about $seenOvr now, potential about ${seenPa / 20f} stars. $advice" + (if (Ecosystem.enabled) " (reliability ${Analytics.reportReliability(err)}%)." else ".")
         b.reports.add(0, ScoutReport(p.id, w.year, w.week, s.name, text))
         while (b.reports.size > 40) b.reports.removeAt(b.reports.size - 1)
         if (advice == "Recommend: sign") {

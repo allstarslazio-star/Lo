@@ -169,7 +169,7 @@ class SaveMigrationMatrixTest {
             assertEquals(1, e.fromVersion)
         }
         assertEquals("a failed migration must not claim the new version", 1, w.saveVersion)
-        assertTrue(SaveMigrations.pathFrom(1)!!.size == 3)
+        assertEquals(Persistence.CURRENT_SAVE_VERSION - 1, SaveMigrations.pathFrom(1)!!.size) // one step per format
         assertTrue(SaveMigrations.withSteps(emptyList()) { SaveMigrations.pathFrom(1) } == null)
     }
 

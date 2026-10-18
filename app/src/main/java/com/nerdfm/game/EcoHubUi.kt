@@ -8,7 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 /** Club Ecosystem hub. Each milestone adds tabs here; every tab is a separate Composable in its own file. */
-private val ECO_TABS = listOf("Organisation", "Medical", "Board", "Identity", "People", "Fans", "Facilities", "Media", "Calendar")
+private val ECO_TABS = listOf("Organisation", "Medical", "Analytics", "Board", "Identity", "People", "Fans", "Facilities", "Media", "Calendar")
 
 @Composable
 fun EcosystemScreen(w: World) {
@@ -23,12 +23,13 @@ fun EcosystemScreen(w: World) {
             when (tab) {
                 0 -> OrganisationTab(w, refresh)
                 1 -> MedicalTab(w, refresh)
-                2 -> BoardTab(w, refresh)
-                3 -> IdentityTab(w)
-                4 -> PeopleTab(w, refresh)
-                5 -> FansTab(w, refresh)
-                6 -> FacilitiesTab(w, refresh)
-                7 -> MediaTab(w, refresh)
+                2 -> AnalyticsTab(w, refresh)
+                3 -> BoardTab(w, refresh)
+                4 -> IdentityTab(w)
+                5 -> PeopleTab(w, refresh)
+                6 -> FansTab(w, refresh)
+                7 -> FacilitiesTab(w, refresh)
+                8 -> MediaTab(w, refresh)
                 else -> CalendarTab(w)
             }
         }
