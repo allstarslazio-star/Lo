@@ -24,3 +24,7 @@ STILL BROKEN / NOT DONE (CI will still fail until these are fixed):
 - App glue COMPILED in CI. UI compile errors are gone.
 - NameForge (static change, not re-run): list-surname share 0.40 -> 0.25, syllable mid-part chance 1/3 -> 1/2, patronymics drawn from first+classic names (Nordheim), fixDuplicates now checks every existing name so a rename can't cascade into a second rename.
 - Still failing before this change: GoldenBaselineTest x2 (realGamePathAveragesMatchTheGoldenBands, everyClubAtMaximumBoostOrPenaltyStaysInsideTheGoldenBands). Needs a decision plus the measured numbers from the test report artifact.
+
+## Update 3 (CI run 39115194010: 371 tests, 2 failed)
+- NameForge tests now pass. Only GoldenBaselineTest x2 remain (shots/xG/etc. bands).
+- app/build.gradle.kts now prints full assertion messages for failing tests in the CI log, so the measured golden numbers show up directly.

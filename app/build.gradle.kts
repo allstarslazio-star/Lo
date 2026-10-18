@@ -25,6 +25,16 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+    testOptions {
+        unitTests.all {
+            // Print the assertion message of every failing test in the CI log (golden-band failures carry the measured numbers).
+            it.testLogging {
+                events("failed")
+                exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                showStackTraces = false
+            }
+        }
+    }
 }
 
 dependencies {
