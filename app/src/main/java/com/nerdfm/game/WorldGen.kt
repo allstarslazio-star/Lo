@@ -87,7 +87,7 @@ object WorldGen {
         val attrs = genAttrs(pos, targetOvr, rnd)
         // ageing physical profile
         val p = Player(
-            w.nextPid++, Names.fullName(nation, rnd), nation, age, pos, secondary(pos, rnd), attrs,
+            w.nextPid++, if (w.richNames) NameForge.make(nation, rnd, NameOptions(age = age)).full else Names.fullName(nation, rnd), nation, age, pos, secondary(pos, rnd), attrs,
             0,
             clampI((12 + rnd.gauss() * 3.5).roundToInt(), 1, 20),
             clampI((10 + rnd.gauss() * 4).roundToInt(), 1, 20),
@@ -121,8 +121,9 @@ object WorldGen {
         p.contractEnd = w.year + 1 + rnd.nextInt(maxY)
     }
 
-    fun generate(seed: Long, manager: String, humanClub: Int = 0): World {
+    fun generate(seed: Long, manager: String, humanClub: Int = 0, richNames: Boolean = false): World {
         val w = World()
+        w.richNames = richNames
         w.seed = seed
         w.manager = manager
         val rnd = Random(seed)
@@ -197,6 +198,7 @@ object WorldGen {
         w.clubs[humanClub].boardConfidence = 60f
         for (c in w.clubs) Lineups.autoPick(w, c)
         startSeason(w, rnd)
+        NameForge.fixDuplicates(w)
         return w
     }
 

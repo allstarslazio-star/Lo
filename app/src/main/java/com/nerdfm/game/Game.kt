@@ -12,6 +12,7 @@ object Game {
     fun startWeek(w: World): Fixture? {
         if (w.week < 1 || w.week > 34) return null
         for (c in w.clubs) { c.weeklyIncome = 0L; c.weeklyExpense = 0L }
+        FixtureCalendar.midweek(w)
         val rnd = w.rng(1)
         var human: Fixture? = null
         for (lg in w.leagues) {
@@ -29,9 +30,11 @@ object Game {
         val ac = w.clubs[fx.away]
         val ht = MatchTeams.build(w, hc, ac, true, rnd)
         val at = MatchTeams.build(w, ac, hc, false, rnd)
-        val eng = MatchEngine(ht, at, rnd)
+        Ecosystem.beginMatch(w, ht, at)
+        val eng = MatchEngine(ht, at, rnd, conditions = MatchConditions.forSeed(w.seed + w.year * 1009L + fx.round * 37L + fx.home * 13L + fx.away))
         eng.simToEnd()
         eng.applyToPlayers(rnd)
+        Ecosystem.endMatch(w)
         w.matchCalibration.recordMatch(ht.goals + at.goals, ht.shots + at.shots)
         record(w, lg, fx, ht.goals, at.goals)
     }
@@ -42,12 +45,17 @@ object Game {
         val ac = w.clubs[fx.away]
         val ht = MatchTeams.build(w, hc, ac, true, rnd)
         val at = MatchTeams.build(w, ac, hc, false, rnd)
-        return MatchEngine(ht, at, rnd)
+        Ecosystem.beginMatch(w, ht, at)
+        return MatchEngine(ht, at, rnd, conditions = MatchConditions.forSeed(w.seed + w.year * 1009L + fx.round * 37L + fx.home * 13L + fx.away))
     }
 
     fun finishHuman(w: World, fx: Fixture, eng: MatchEngine) {
+        // A fixture is the durable idempotency key: a repeated UI event or retry must
+        // never apply player stats, table points, gate receipts, or board confidence twice.
+        if (fx.played) return
         val rnd = w.rng(3)
         eng.applyToPlayers(rnd)
+        Ecosystem.endMatch(w)
         w.matchCalibration.recordMatch(eng.home.goals + eng.away.goals, eng.home.shots + eng.away.shots)
         val lg = w.leagueOf(w.humanClubId)
         val me = w.human()
@@ -67,12 +75,15 @@ object Game {
         val og = if (fx.home == me.id) eng.away.goals else eng.home.goals
         val res = if (mg > og) "won" else if (mg < og) "lost" else "drew"
         w.lastResult = "You $res $mg-$og vs ${opp.name}"
+        Business.onHumanResult(w, mg, og)
         // board
         val rank = leagueRank(w, me)
         val n = lg.clubIds.size
         val expPpg = 2.0f - 1.3f * rank / (n - 1).toFloat()
         val pts = if (mg > og) 3 else if (mg == og) 1 else 0
         me.boardConfidence = clampF(me.boardConfidence + (pts - expPpg) * 0.9f, 0f, 100f)
+        PlayerRelations.evaluateBoard(w)
+        w.managerReputation = clampF(w.managerReputation + if (mg > og) 0.12f else if (mg == og) 0.03f else -0.08f, 0f, 100f)
     }
 
     fun leagueRank(w: World, c: Club): Int {
@@ -82,6 +93,9 @@ object Game {
     }
 
     fun record(w: World, lg: League, fx: Fixture, hg: Int, ag: Int) {
+        // All call sites should only record an unplayed fixture. Keep this guard here
+        // as a second line of defence against duplicate processing after retries.
+        if (fx.played) return
         fx.played = true
         fx.hg = hg
         fx.ag = ag
@@ -102,7 +116,7 @@ object Game {
         if (ar.form.length > 5) ar.form.deleteCharAt(0)
         // gate receipts
         val att = clampF(0.8f + 0.04f * hr.pts / max(1, hr.p) * 3f + 0.1f * (hc.rep / 100f), 0.7f, 1.2f)
-        val gate = (hc.revenue * 0.30 / 17.0 * att).toLong()
+        val gate = (hc.revenue * 0.30 / 17.0 * att * Business.gateMultiplier(w, hc) * ClubEnvRules.gateFactor(w, hc)).toLong()
         hc.balance += gate
         hc.weeklyIncome += gate
     }
@@ -111,6 +125,11 @@ object Game {
 
     fun completeWeek(w: World) {
         val rnd = w.rng(2)
+        Ecosystem.preWeek(w)
+        Business.preWeek(w)
+        val recoveryMult = Ecosystem.weeklyRecovery(w)
+        val trainingMult = Ecosystem.trainingMultipliers(w)
+        val trainingInjMult = Ecosystem.trainingInjuryMultipliers(w)
         val squadTopCut = HashMap<Int, Int>()
         for (c in w.clubs) {
             val sorted = w.squad(c).sortedByDescending { it.ovr }
@@ -125,13 +144,13 @@ object Game {
             if (p.clubId >= 0) {
                 val c = w.clubs[p.clubId]
                 val recovery = when (p.trainingIntensity) { 0 -> 1.20f; 2 -> 0.72f; else -> 1f }
-                val gain = (28f + p.attrs.at(Attr.Fitness) * 1.1f + c.facilities * 0.5f) * recovery
+                val gain = (28f + p.attrs.at(Attr.Fitness) * 1.1f + c.facilities * 0.5f) * recovery * recoveryMult[p.clubId]
                 p.condition = min(100f, p.condition + gain)
                 val playedSharpness = if (p.lastMinutes >= 60) 5f else if (p.lastMinutes >= 20) 2f else -1.5f
                 val trainingSharpness = when (p.trainingIntensity) { 0 -> 1.5f; 2 -> 4.5f; else -> 3f }
                 p.sharpness = clampF(p.sharpness + playedSharpness + trainingSharpness + (c.facilities - 8) * 0.15f, 20f, 100f)
                 if (p.injWeeks > 0) { p.condition = min(p.condition, 60f); p.sharpness = min(p.sharpness, 65f) }
-                else if (p.trainingIntensity == 2 && rnd.nextDouble() < (0.0025 + (100f - p.condition) / 10000f)) {
+                else if (p.trainingIntensity == 2 && rnd.nextDouble() < (0.0025 + (100f - p.condition) / 10000f) * trainingInjMult[c.id]) {
                     p.injWeeks = 1 + rnd.nextInt(3)
                     p.injType = listOf("muscle strain", "ankle knock", "fatigue-related injury")[rnd.nextInt(3)]
                     if (p.clubId == w.humanClubId) w.addNews("Training injury", "${p.name} suffered a ${p.injType} during an intensive training week and is expected to miss ${p.injWeeks} week(s).")
@@ -139,7 +158,7 @@ object Game {
                 // Attribute growth is deliberately gradual, potential-limited, and influenced by coaches/facilities.
                 if (p.age <= 30 && p.ovr < p.pa && p.injWeeks == 0 && p.trainingIntensity > 0) {
                     val coachBonus = c.coaches.maxOfOrNull { it.rating } ?: 45
-                    val chance = (0.025 + c.facilities * 0.0015 + coachBonus * 0.00035 + p.attrs.at(Attr.Determination) * 0.0005) * if (p.trainingIntensity == 2) 1.25 else 1.0
+                    val chance = (0.025 + c.facilities * 0.0015 + coachBonus * 0.00035 + p.attrs.at(Attr.Determination) * 0.0005) * if (p.trainingIntensity == 2) 1.25 else 1.0 * trainingMult[c.id]
                     if (rnd.nextDouble() < chance) {
                         val focus = when (p.trainingFocus) {
                             "Attacking" -> listOf(Attr.Finishing, Attr.FirstTouch, Attr.OffTheBall, Attr.Technique)
@@ -173,15 +192,18 @@ object Game {
             }
             p.lastMinutes = 0
         }
+        PlayerRelations.weeklyUpdate(w)
         // Weekly coaching costs are part of the club wage bill and are intentionally transparent.
         // Finances
         for (c in w.clubs) {
             val base = (c.revenue * 0.55 / 52.0).toLong()
             val wages = w.wageBill(c)
             val upkeep = (c.revenue * 0.05 / 52.0 * (0.5 + c.facilities / 10.0)).toLong()
-            c.balance += base - wages - upkeep
-            c.weeklyIncome += base
-            c.weeklyExpense = wages + upkeep
+            val extra = Business.weeklyAdjustment(w, c, base)
+            val staffNet = Staffing.netWeeklyCost(w, c)
+            c.balance += base + extra - wages - upkeep - staffNet
+            c.weeklyIncome += base + max(0L, extra)
+            c.weeklyExpense = wages + upkeep + staffNet
         }
         // offers
         w.offers.removeAll { it.expiresWeek < w.week || w.players[it.playerId]?.clubId != w.humanClubId }
@@ -203,7 +225,7 @@ object Game {
         if (bill > me.wageBudget) me.boardConfidence = max(0f, me.boardConfidence - 0.3f)
         if (me.balance < 0) me.boardConfidence = max(0f, me.boardConfidence - 0.5f)
         if (me.autoPick) Lineups.autoPick(w, me) else Lineups.fixHuman(w, me)
-        if (w.week >= 8 && me.boardConfidence <= 8f) {
+        if (w.week >= 8 && me.boardConfidence <= BoardRules.sackThreshold(w)) {
             w.sacked = true
             w.sackReason = "The board lost all faith in your project."
         }
@@ -211,11 +233,13 @@ object Game {
             w.sacked = true
             w.sackReason = "The club is bankrupt. Administrators have dismissed you."
         }
+        Business.postWeek(w, rnd)
         if (w.week == 34) {
             endSeason(w, rnd)
         } else {
             w.week++
         }
+        Ecosystem.postWeek(w)
     }
 
     // ------------------------------------------------------------ scouting
@@ -245,6 +269,8 @@ object Game {
     // ------------------------------------------------------------ season end
 
     private fun endSeason(w: World, rnd: Random) {
+        Business.seasonReview(w)
+        Ecosystem.seasonReview(w)
         // Evolve only AI manager genomes at the season boundary; human tactics are preserved.
         ManagerPopulationTraining.evolve(w, kotlin.random.Random(rnd.nextLong()))
         val me = w.human()
@@ -340,11 +366,12 @@ object Game {
         for (c in w.clubs) {
             val q = WorldGen.MEAN_OVR[c.tier] + (c.rep - WorldGen.BASE_REP[c.tier]) * 0.25f
             val k = 3 + rnd.nextInt(3)
+            val yEff = Identity.effectiveYouth(w, c)
             var bestProspect: Player? = null
             for (i in 0 until k) {
                 val pos = listOf(Pos.GK, Pos.LB, Pos.RB, Pos.CB, Pos.CB, Pos.DM, Pos.CM, Pos.CM, Pos.LW, Pos.RW, Pos.AM, Pos.ST, Pos.ST)[rnd.nextInt(13)]
-                val target = clampF(q - 17f + c.youth * 0.5f + rnd.gauss().toFloat() * 4f, 12f, 65f)
-                var pa = target + 10 + rnd.nextInt(16) + c.youth * 0.4f
+                val target = clampF(q - 17f + yEff * 0.5f + rnd.gauss().toFloat() * 4f, 12f, 65f)
+                var pa = target + 10 + rnd.nextInt(16) + yEff * 0.4f
                 if (rnd.nextInt(20) == 0) pa += 14f
                 val p = WorldGen.makePlayer(w, rnd, pos, target, 16, pa.roundToInt(), Names.pickNation(rnd))
                 p.clubId = c.id
@@ -352,6 +379,7 @@ object Game {
                 p.contractEnd = w.year + 1 + 3
                 w.players[p.id] = p
                 c.players.add(p.id)
+                Identity.onYouthIntake(w, c, p)
                 if (bestProspect == null || p.pa > bestProspect.pa) bestProspect = p
             }
             if (c.human && bestProspect != null) {
@@ -369,6 +397,7 @@ object Game {
                 if (champion || myMove == 1) c.wageBudget = (c.wageBudget * 1.08).toLong()
             }
         }
+        BoardRules.adjustBudgets(w)
         WorldGen.addFreeAgents(w, rnd, 120)
         val fa = w.players.values.filter { it.clubId < 0 }
         if (fa.size > 700) {

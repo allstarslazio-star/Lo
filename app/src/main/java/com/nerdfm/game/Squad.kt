@@ -97,10 +97,10 @@ fun SquadScreen(w: World) {
         }
         Spacer(Modifier.height(6.dp))
         Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState())) {
-            Column(Modifier.width(860.dp).fillMaxHeight()) {
+            Column(Modifier.width(890.dp).fillMaxHeight()) {
                 Row(Modifier.background(C.surface).padding(vertical = 4.dp, horizontal = 4.dp)) {
                     HeadCell("Pos", 40, "pos", sortKey) { sortKey = it }
-                    HeadCell("Name", 170, "name", sortKey) { sortKey = it }
+                    HeadCell("Name", 200, "name", sortKey) { sortKey = it }
                     HeadCell("Age", 38, "age", sortKey) { sortKey = it }
                     HeadCell("Ovr", 40, "ovr", sortKey) { sortKey = it }
                     HeadCell("Pot", 40, "pot", sortKey) { sortKey = it }
@@ -118,7 +118,7 @@ fun SquadScreen(w: World) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Cell(p.pos.label + (p.pos2?.let { "/" + it.label.take(2) } ?: ""), 40, C.muted)
-                            Cell(p.name, 170, C.text, p.listed)
+                            PlayerTag(w, p, 200.dp, C.text, p.listed)
                             Cell("${p.age}", 38)
                             Cell("${p.ovr}", 40, ovrColor(p.ovr), true)
                             Cell(potText(w, p), 40, C.muted)
@@ -164,6 +164,8 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
         ) {
             Column(Modifier.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    PlayerPortrait(w, p)
+                    Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         T(p.name, 18, C.accent, true)
                         T("${Names.nations[p.nation].name}  |  age ${p.age}  |  ${p.pos.label}" + (p.pos2?.let { " / " + it.label } ?: "") + "  |  $clubName", 12, C.muted)
@@ -196,6 +198,10 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
                         T("Fitness ${p.condition.roundToInt()}%  Sharpness ${p.sharpness.roundToInt()}%", 12, if (p.condition < 65f || p.sharpness < 50f) C.amber else C.muted, lines = 2)
                         T("Morale ${p.morale.roundToInt()}  Form ${p.form.roundToInt()}", 12, C.muted)
                         T("Value ${money(p.value())}  |  Wage demand ${money(p.wageDemand().toLong())}/wk", 12)
+                        val releaseClause = ContractDeals.releaseClauseFor(w, p)
+                        if (releaseClause > 0L) T("Release clause ${money(releaseClause)}", 12, C.amber, lines = 2)
+                        val loan = Loans.loanFor(w, p.id)
+                        if (loan != null) T("On loan (${loan.borrowerSharePct}% of wages paid by the borrower)", 12, C.amber, lines = 2)
                         T("Career: ${p.apps} apps  |  ${p.goals} goals  |  ${p.assists} assists  |  ${p.minutes} minutes", 12, C.muted, lines = 2)
                         if (p.apps > 0) T("Average rating ${"%.2f".format(p.avgRating())} / 10", 12, C.accent)
                         T("Career performance", 13, C.accent, true)
@@ -213,8 +219,10 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
                         if (own) {
                             Btn("Renew contract", modifier = Modifier.fillMaxWidth()) { step = "renew"; msg = "" }
                             Spacer(Modifier.height(4.dp))
-                            Btn(if (p.listed) "Remove from transfer list" else "List for transfer", modifier = Modifier.fillMaxWidth()) {
-                                p.listed = !p.listed; onChanged()
+                            Btn(if (p.listed) "Listed for transfer ✓ · Remove listing" else "List player for transfer", modifier = Modifier.fillMaxWidth()) {
+                                p.listed = !p.listed
+                                msg = if (p.listed) "${p.name} is now listed for transfer." else "${p.name} is no longer listed for transfer."
+                                onChanged()
                             }
                             Spacer(Modifier.height(4.dp))
                             Btn("Release", modifier = Modifier.fillMaxWidth()) { step = "release"; msg = "" }
@@ -242,8 +250,8 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
 
     when (step) {
         "bid" -> {
-            var counter by remember { mutableStateOf(0L) }
-            var feeText by remember { mutableStateOf(fee.toString()) }
+            var feeText by remember(fee, p.id) { mutableStateOf(fee.toString()) }
+            var submittingBid by remember(p.id, fee) { mutableStateOf(false) }
             AlertDialog(
                 onDismissRequest = { step = "view" },
                 title = { Text("Bid for ${p.name}") },
@@ -259,12 +267,18 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
                     }
                 },
                 confirmButton = {
-                    Btn("Submit bid") {
-                        val f = feeText.toLongOrNull() ?: 0L
-                        val r = Transfers.bid(w, p, f)
-                        msg = r.msg
-                        if (r.status == 0) { fee = f; step = "terms"; msg = "" }
-                        else if (r.status == 2) { feeText = r.counter.toString() }
+                    Btn(if (submittingBid) "Submitting…" else "Submit bid", enabled = !submittingBid) {
+                        if (!submittingBid) {
+                            submittingBid = true
+                            val f = feeText.toLongOrNull() ?: 0L
+                            val r = Transfers.bid(w, p, f)
+                            msg = r.msg
+                            if (r.status == 0) { fee = f; step = "terms"; msg = "" }
+                            else {
+                                if (r.status == 2) feeText = r.counter.toString()
+                                submittingBid = false
+                            }
+                        }
                     }
                 },
                 dismissButton = { TextButton(onClick = { step = "view"; msg = "" }) { Text("Cancel") } }
@@ -273,8 +287,9 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
         "terms", "renew" -> {
             val renew = step == "renew"
             val wanted = if (renew) p.wageDemand() else Transfers.wantedWage(me, p)
-            var wageText by remember { mutableStateOf(wanted.toString()) }
-            var years by remember { mutableIntStateOf(3) }
+            var wageText by remember(p.id, step) { mutableStateOf(wanted.toString()) }
+            var years by remember(p.id, step) { mutableIntStateOf(3) }
+            var submitting by remember(p.id, step) { mutableStateOf(false) }
             AlertDialog(
                 onDismissRequest = { step = "view" },
                 title = { Text(if (renew) "New contract: ${p.name}" else "Contract terms: ${p.name}") },
@@ -293,10 +308,14 @@ fun PlayerDialog(w: World, p: Player, onClose: () -> Unit, onChanged: () -> Unit
                     }
                 },
                 confirmButton = {
-                    Btn(if (renew) "Offer deal" else "Sign player") {
-                        val wage = wageText.toIntOrNull() ?: 0
-                        val r = if (renew) Transfers.renew(w, p, wage, years) else Transfers.completeSigning(w, p, fee, wage, years)
-                        if (r.first) { step = "view"; onChanged(); if (!renew) onClose() } else msg = r.second
+                    Btn(if (submitting) "Processing…" else if (renew) "Offer deal" else "Sign player", enabled = !submitting) {
+                        if (!submitting) {
+                            submitting = true
+                            val wage = wageText.toIntOrNull() ?: 0
+                            val r = if (renew) Transfers.renew(w, p, wage, years) else Transfers.completeSigning(w, p, fee, wage, years)
+                            if (r.first) { step = "view"; onChanged(); if (!renew) onClose() }
+                            else { msg = r.second; submitting = false }
+                        }
                     }
                 },
                 dismissButton = { TextButton(onClick = { step = "view"; msg = "" }) { Text("Cancel") } }

@@ -34,24 +34,32 @@ object Transfers {
     fun bid(w: World, p: Player, fee: Long): BidResult {
         val me = w.human()
         if (!w.isWindowOpen()) return BidResult(3, "The transfer window is closed.")
+        if (fee < 0L) return BidResult(3, "Enter a valid transfer fee.")
         if (p.clubId == me.id) return BidResult(3, "He already plays for you.")
         if (p.clubId < 0) return BidResult(3, "He is a free agent - sign him directly.")
+        if (Loans.loanFor(w, p.id) != null) return BidResult(3, "${p.name} is out on loan and cannot be bought right now.")
+        Business.signingRestriction(w, fee)?.let { return BidResult(3, it) }
         if (fee > me.transferBudget) return BidResult(3, "Your transfer budget (${money(me.transferBudget)}) does not cover this bid.")
         if (fee > me.balance) return BidResult(3, "The club cannot afford this fee.")
         val seller = w.clubs[p.clubId]
-        if (w.squad(seller).size <= 19) return BidResult(1, "${seller.name} refuse to sell - their squad is too thin.")
+        val clause = ContractDeals.releaseClauseFor(w, p)
+        val clauseMet = clause > 0L && fee >= clause
+        if (w.squad(seller).size <= 19 && !clauseMet) return BidResult(1, "${seller.name} refuse to sell - their squad is too thin.")
         val ask = askingPrice(w, p, me)
         return when {
-            fee >= ask -> BidResult(0, "${seller.name} have accepted your bid of ${money(fee)}.")
+            fee >= ask || clauseMet -> BidResult(0, "${seller.name} have accepted your bid of ${money(fee)}.")
             fee >= (ask * 0.85).toLong() -> BidResult(2, "${seller.name} have rejected your bid but would sell for ${money(ask)}.", ask)
             else -> BidResult(1, "${seller.name} have flatly rejected your bid.")
         }
     }
 
     fun move(w: World, p: Player, to: Club, fee: Long, wage: Int, years: Int, rnd: Random) {
+        val fromId = p.clubId
         if (p.clubId >= 0) {
             val from = w.clubs[p.clubId]
             from.players.remove(p.id)
+            for (i in from.lineup.indices) if (from.lineup[i] == p.id) from.lineup[i] = -1
+            for (i in from.bench.indices) if (from.bench[i] == p.id) from.bench[i] = -1
             from.balance += fee
             from.transferBudget += (fee * 0.5).toLong()
         }
@@ -63,22 +71,45 @@ object Transfers {
         p.listed = false
         p.morale = 75f
         p.seasonsAtClub = 0
-        to.players.add(p.id)
-        for (i in 0 until 11) if (to.lineup[i] == p.id) to.lineup[i] = -1
+        if (!to.players.contains(p.id)) to.players.add(p.id)
+        for (i in to.lineup.indices) if (to.lineup[i] == p.id) to.lineup[i] = -1
+        for (i in to.bench.indices) if (to.bench[i] == p.id) to.bench[i] = -1
+        ContractDeals.onTransfer(w, p, fromId, fee)
     }
 
     /** Human finalises a purchase with personal terms. Returns message and whether it worked. */
     fun completeSigning(w: World, p: Player, fee: Long, wage: Int, years: Int): Pair<Boolean, String> {
         val me = w.human()
+        if (!w.isWindowOpen()) return false to "The transfer window is closed."
+        if (p.clubId == me.id) return false to "${p.name} already plays for your club."
+        if (p.clubId < -1 || (p.clubId >= 0 && w.clubs.getOrNull(p.clubId) == null)) return false to "This player is no longer available."
+        if (fee < 0L) return false to "Enter a valid transfer fee."
+        if (fee > me.transferBudget) return false to "The board transfer budget does not cover this fee (${money(me.transferBudget)} available)."
+        if (fee > me.balance) return false to "The club cannot afford this fee (${money(me.balance)} available)."
+        Business.signingRestriction(w, fee)?.let { return false to it }
+        BoardRules.signingRestriction(w, fee)?.let { return false to it }
+        if (Loans.loanFor(w, p.id) != null) return false to "${p.name} is out on loan and cannot be signed right now."
+        val clauseMet = p.clubId >= 0 && ContractDeals.releaseClauseFor(w, p).let { it > 0L && fee >= it }
+        if (p.clubId >= 0) {
+            val seller = w.clubs[p.clubId]
+            if (w.squad(seller).size <= 19 && !clauseMet) return false to "${seller.name} refuse to sell - their squad is too thin."
+            val ask = askingPrice(w, p, me)
+            if (fee < ask && !clauseMet) return false to "The accepted fee is no longer sufficient. ${seller.name} now want ${money(ask)}."
+        } else if (fee != 0L) return false to "A free agent should not require a transfer fee."
+        if (wage <= 0 || years !in 1..5) return false to "Enter valid contract terms."
         if (!willJoin(me, p)) return false to "${p.name} is not interested in joining a club of your stature."
         val wanted = wantedWage(me, p)
         if (wage < wanted) return false to "${p.name} wants at least ${money(wanted.toLong())} per week."
         val newBill = w.wageBill(me) + wage
         if (newBill > me.wageBudget) return false to "The board will not sanction this - it would break the wage budget (${money(me.wageBudget)}/wk)."
         if (me.players.size >= 40) return false to "Your squad is full (40 players)."
+        val agent = ContractDeals.agentFee(fee, wage, years)
+        if (fee + agent > me.balance) return false to "The club cannot afford the fee plus ${money(agent)} in agent fees."
         val rnd = w.rng(p.id)
         val from = if (p.clubId >= 0) w.clubs[p.clubId].name else "free agency"
         move(w, p, me, fee, wage, years, rnd)
+        me.balance -= agent
+        w.biz().seasonAgentFees += agent
         w.addNews("Signing complete", "${p.name} (${p.pos.label}, ${p.ovr}) joins from $from for ${if (fee > 0) money(fee) else "free"}.")
         return true to "${p.name} has signed for ${me.name}!"
     }
@@ -98,6 +129,7 @@ object Transfers {
     }
 
     fun release(w: World, p: Player): String {
+        if (Loans.loanFor(w, p.id) != null) return "${p.name} is on loan. Send him back from Business > Loans instead."
         val me = w.human()
         val yearsLeft = max(0, p.contractEnd - (w.year + 1))
         val cost = p.wage.toLong() * 52L * (yearsLeft + 1) / 2L
@@ -113,8 +145,10 @@ object Transfers {
     }
 
     fun counterOffer(w: World, o: Offer, counterFee: Long): String {
+        if (w.offers.none { it === o }) return "This offer is no longer active."
         val p = w.players[o.playerId] ?: return "Player no longer available."
         if (p.clubId != w.humanClubId || !w.isWindowOpen()) return "This offer can no longer be negotiated."
+        if (counterFee <= 0L) return "Enter a valid counteroffer."
         val buyer = w.clubs.getOrNull(o.fromClub) ?: return "The buying club is no longer available."
         if (counterFee <= o.fee) return "Your counteroffer must be higher than the original bid."
         if (counterFee > (p.value() * 2.5).toLong()) return "${buyer.name} are unlikely to consider such a high fee."
@@ -132,29 +166,39 @@ object Transfers {
     }
 
     fun acceptOffer(w: World, o: Offer): String {
-        val p = w.players[o.playerId] ?: return "Player no longer available."
-        val buyer = w.clubs[o.fromClub]
+        if (w.offers.none { it === o }) return "This offer is no longer active."
+        val p = w.players[o.playerId] ?: run { w.offers.remove(o); return "Player no longer available." }
+        val buyer = w.clubs.getOrNull(o.fromClub) ?: run { w.offers.remove(o); return "The buying club is no longer available." }
         val me = w.human()
         if (p.clubId != me.id) { w.offers.remove(o); return "Player no longer at the club." }
+        if (Loans.loanFor(w, p.id) != null) { w.offers.remove(o); return "${p.name} is on loan and cannot be sold." }
+        if (!w.isWindowOpen()) return "The transfer window is closed; this offer cannot be completed now."
+        if (o.fee <= 0L) return "The offer fee is invalid."
+        if (o.fee > buyer.balance || o.fee > buyer.transferBudget) return "${buyer.name} can no longer afford this offer. Reject it or wait for another bid."
         if (me.players.size <= 17) return "You cannot sell - your squad would drop below the minimum."
         val rnd = w.rng(p.id)
         val wage = max(300, (p.wageDemand() * (0.9 + rnd.nextDouble() * 0.3)).toInt())
         val from = me
+        val saleFee = ContractDeals.saleFeeAfterClause(w, o.fee)
+        ContractDeals.onTransfer(w, p, me.id, saleFee)
         from.players.remove(p.id)
-        from.balance += o.fee
-        from.transferBudget += (o.fee * 0.6).toLong()
-        buyer.balance -= o.fee
-        buyer.transferBudget = max(0L, buyer.transferBudget - o.fee)
+        from.balance += saleFee
+        from.transferBudget += (saleFee * 0.6).toLong()
+        buyer.balance -= saleFee
+        buyer.transferBudget = max(0L, buyer.transferBudget - saleFee)
         p.clubId = buyer.id
         p.wage = wage
         p.contractEnd = w.year + 1 + rnd.nextInt(4)
         p.listed = false
-        buyer.players.add(p.id)
+        if (!buyer.players.contains(p.id)) buyer.players.add(p.id)
+        for (i in buyer.lineup.indices) if (buyer.lineup[i] == p.id) buyer.lineup[i] = -1
+        for (i in buyer.bench.indices) if (buyer.bench[i] == p.id) buyer.bench[i] = -1
         for (i in 0 until 11) if (me.lineup[i] == p.id) me.lineup[i] = -1
         for (i in 0 until 7) if (me.bench[i] == p.id) me.bench[i] = -1
         w.offers.removeAll { it.playerId == p.id }
-        w.addNews("Player sold", "${p.name} joined ${buyer.name} for ${money(o.fee)}.")
-        return "${p.name} sold to ${buyer.name} for ${money(o.fee)}."
+        ContractDeals.registerSellOn(w, p, me.id)
+        w.addNews("Player sold", "${p.name} joined ${buyer.name} for ${money(saleFee)}.")
+        return "${p.name} sold to ${buyer.name} for ${money(saleFee)}."
     }
 
     // ---------------------------------------------------------------- AI behaviour
@@ -162,7 +206,7 @@ object Transfers {
     fun generateOffers(w: World, rnd: Random) {
         if (!w.isWindowOpen()) return
         val me = w.human()
-        val squad = w.squad(me).sortedByDescending { it.ovr }
+        val squad = w.squad(me).filter { Loans.loanFor(w, it.id) == null }.sortedByDescending { it.ovr }
         // Occasionally surface realistic scouting interest before a formal bid arrives.
         if (squad.isNotEmpty() && rnd.nextDouble() < 0.22) {
             val watched = squad.filter { !w.offers.any { offer -> offer.playerId == it.id } }.randomOrNull(rnd)
@@ -220,6 +264,7 @@ object Transfers {
             var bestS = -1f
             for (p in all) {
                 if (p.pos != needPos || p.clubId == c.id || p.age > 33) continue
+                if (Loans.loanFor(w, p.id) != null) continue
                 if (p.ovr < bar || p.ovr > q + 9) continue
                 val human = p.clubId >= 0 && w.clubs[p.clubId].human
                 if (human) continue
@@ -251,7 +296,7 @@ object Transfers {
             if (c.human) continue
             // trim
             while (c.players.size > 38) {
-                val worst = w.squad(c).minByOrNull { it.ovr + (if (it.age < 20) 8 else 0) } ?: break
+                val worst = w.squad(c).filter { Loans.loanFor(w, it.id) == null }.minByOrNull { it.ovr + (if (it.age < 20) 8 else 0) } ?: break
                 c.players.remove(worst.id)
                 worst.clubId = -1
                 worst.wage = 0

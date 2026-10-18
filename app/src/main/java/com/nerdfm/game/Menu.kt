@@ -23,6 +23,7 @@ fun MainMenu() {
     val ctx = LocalContext.current
     val scope = App.scope
     var hasSave by remember { mutableStateOf(Persistence.exists(ctx.filesDir)) }
+    var hasBackup by remember { mutableStateOf(Persistence.backupExists(ctx.filesDir)) }
     var loadMessage by remember { mutableStateOf<String?>(null) }
     Row(Modifier.fillMaxSize().padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -44,19 +45,46 @@ fun MainMenu() {
                             App.mode = Mode.GAME
                         }
                         LoadResult.NoSave -> {
-                            hasSave = false
-                            loadMessage = "No saved career was found. You can start a new career."
+                            hasSave = Persistence.exists(ctx.filesDir)
+                            hasBackup = Persistence.backupExists(ctx.filesDir)
+                            loadMessage = if (hasBackup) "The main save is missing. Use Restore last backup to recover the last verified career." else "No saved career was found. You can start a new career."
                         }
                         is LoadResult.Incompatible -> {
                             hasSave = Persistence.exists(ctx.filesDir)
+                            hasBackup = Persistence.backupExists(ctx.filesDir)
                             val backup = result.backupFileName?.let { " Preserved as $it." }.orEmpty()
                             loadMessage = "This career save is incompatible with this version of Nerd FM. It was not loaded.$backup ${result.reason}"
                         }
                         is LoadResult.Corrupt -> {
                             hasSave = Persistence.exists(ctx.filesDir)
+                            hasBackup = Persistence.backupExists(ctx.filesDir)
                             val backup = result.backupFileName?.let { " Preserved as $it." }.orEmpty()
                             loadMessage = "This career save is damaged and could not be loaded.$backup ${result.reason}"
                         }
+                        is LoadResult.Unreadable -> {
+                            hasSave = Persistence.exists(ctx.filesDir)
+                            hasBackup = Persistence.backupExists(ctx.filesDir)
+                            loadMessage = result.reason
+                        }
+                    }
+                }
+            }
+            Btn("Restore last backup", enabled = hasBackup && !hasSave, modifier = Modifier.fillMaxWidth()) {
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { Persistence.restoreBackup(ctx.filesDir) }
+                    when (result) {
+                        is LoadResult.Loaded -> {
+                            App.world = result.world
+                            App.screen = "Inbox"
+                            App.mode = Mode.GAME
+                            hasSave = true
+                            hasBackup = Persistence.backupExists(ctx.filesDir)
+                            loadMessage = null
+                        }
+                        is LoadResult.Incompatible -> loadMessage = "The last backup is incompatible and was preserved. ${result.reason}"
+                        is LoadResult.Corrupt -> loadMessage = "The last backup is damaged and was preserved. ${result.reason}"
+                        is LoadResult.Unreadable -> loadMessage = result.reason
+                        LoadResult.NoSave -> { hasBackup = false; loadMessage = "No last-good backup was found." }
                     }
                 }
             }
@@ -99,7 +127,7 @@ fun NewGameScreen() {
             Btn("Start career", enabled = pw != null && picked >= 0) {
                 scope.launch {
                     val w = heavy("Building the football world...") {
-                        val g = WorldGen.generate(seed, name.ifBlank { "Manager" }, picked)
+                        val g = WorldGen.generate(seed, name.ifBlank { "Manager" }, picked, richNames = true)
                         g.addNews("Welcome", "The board have appointed you at ${g.human().name}. Expect a tough job.")
                         g
                     }

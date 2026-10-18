@@ -22,7 +22,7 @@ fun PlayerRow(w: World, p: Player, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Cell(p.pos.label, 36, C.muted)
-        Cell(p.name, 160)
+        PlayerTag(w, p, 190.dp)
         Cell("${p.age}", 30)
         Cell(if (p.clubId >= 0) w.clubs[p.clubId].name else "Free agent", 150, C.muted)
         val o = shownOvr(w, p)
@@ -89,7 +89,7 @@ fun TransferScreen(w: World) {
                 }
                 Panel(Modifier.weight(1f).fillMaxHeight()) {
                     Row {
-                        Cell("Pos", 36, C.muted); Cell("Name", 160, C.muted); Cell("Age", 30, C.muted)
+                        Cell("Pos", 36, C.muted); Cell("Name", 190, C.muted); Cell("Age", 30, C.muted)
                         Cell("Club", 150, C.muted); Cell("Ovr", 38, C.muted); Cell("Pot", 56, C.muted)
                         Cell("Value", 70, C.muted); Cell("Asking", 70, C.muted)
                     }
@@ -108,12 +108,14 @@ fun TransferScreen(w: World) {
         } else {
             Panel(Modifier.fillMaxSize()) {
                 if (w.offers.isEmpty()) T("No offers right now. Listing players for transfer attracts bids.", 12, C.muted, lines = 2)
-                if (msg.isNotEmpty()) T(msg, 12, C.amber, lines = 2)
+                if (msg.isNotEmpty() && counterOffer == null) T(msg, 12, C.amber, lines = 2)
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(w.offers.toList()) { o ->
                         val p = w.players[o.playerId]
                         if (p != null) {
                             Row(Modifier.fillMaxWidth().background(C.card).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                PlayerPortrait(w, p, 44.dp)
+                                Spacer(Modifier.width(8.dp))
                                 Column(Modifier.weight(1f)) {
                                     T("${p.name} (${p.pos.label}, ${p.ovr})", 13, bold = true)
                                     T("${w.clubs[o.fromClub].name} offer ${money(o.fee)}  |  value ${money(p.value())}", 12, C.muted, lines = 2)
@@ -141,6 +143,10 @@ fun TransferScreen(w: World) {
                     T("Original bid: ${money(offer.fee)}", 12, C.muted)
                     OutlinedTextField(value = feeText, onValueChange = { feeText = it.filter(Char::isDigit).take(12) }, singleLine = true, label = { Text("Your counteroffer") }, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
                     T("Counteroffers depend on the player's value and the buying club's reputation and budget.", 11, C.muted, lines = 3)
+                    if (msg.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        T(msg, 12, if (msg.contains("accepted", true)) C.green else C.amber, lines = 4)
+                    }
                 }
             },
             confirmButton = { Btn("Send counteroffer") {

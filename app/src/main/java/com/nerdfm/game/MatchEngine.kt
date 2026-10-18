@@ -295,9 +295,9 @@ private object K {
     // logit offsets / slopes of the three phase transitions
     var A0 = 1.75f; var B0 = 1.10f      // build-up (own third -> midfield)
     var A1 = 0.55f; var B1 = 1.20f      // midfield (-> final third)
-    var A2 = -0.55f; var B2 = 1.30f     // final third (-> shot)
-    var HOME = 0.035f                    // home edge on control / press
-    var GOAL = 0.36f                     // conservative conversion to avoid arcade-like scorelines
+    var A2 = -0.80f; var B2 = 1.30f     // final third (-> shot)
+    var HOME = 0.42f                    // home edge on control / press
+    var GOAL = 0.30f                     // conservative conversion to avoid arcade-like scorelines
     var XG = 1.00f                       // global chance-quality scale
     var FOUL = 1.00f                     // global foul scale
     var PEN = 0.060f                     // chance a foul in the final third is a penalty
@@ -319,7 +319,7 @@ private const val S_PEN = 8     // penalty
 private const val S_COR = 9     // header from a corner / set-piece delivery
 private const val S_REB = 10    // rebound
 
-class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, private val calibration: MatchCalibration = home.calibration) {
+class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, private val calibration: MatchCalibration = home.calibration, val conditions: MatchConditions = MatchConditions.NORMAL) {
     val events = ArrayList<MatchEvent>()
     var half = 1
     var t = 0
@@ -594,6 +594,8 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
         var dur = when (z) { 0 -> 10f; 1 -> 11f; else -> 8f }
         dur *= (if (att.eTempo == 0) 1.18f else if (att.eTempo == 2) 0.84f else 1f)
         dur *= (if (att.ePass == 0) 1.08f else if (att.ePass == 2) 0.88f else 1f)
+        // Difficult surfaces slow circulation and make sustained attacks less frequent.
+        dur *= (2f - conditions.passingMultiplier).coerceIn(0.85f, 1.12f)
         dur *= 0.65f + 0.8f * rf()
         possSec[ai] += dur.toDouble()
         when (z) {
@@ -935,7 +937,7 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
             S_PEN -> 0.5f * shooter.fin + 0.3f * shooter.stp + 0.2f * shooter.p.attrs.at(Attr.Composure) * 5f
             else -> 0.85f * shooter.fin + 0.15f * shooter.mov
         }
-        return q * shooter.ef
+        return q * shooter.ef * conditions.shootingMultiplier
     }
 
     /** Resolves one shot. Sets possession / zone for what happens next. */
@@ -1286,7 +1288,7 @@ class MatchEngine(val home: MatchTeam, val away: MatchTeam, val rnd: Random, pri
         val ps = tm.onPitch[rnd.nextInt(tm.onPitch.size)]
         if (ps.injured) return
         val fit = 1.15f - ps.p.attrs.at(Attr.Fitness) / 40f
-        val pr = 0.0015f * (0.6f + ps.p.injuryProne / 20f) * (1f + (100f - ps.cond) / 150f) * fit
+        val pr = 0.0015f * (0.6f + ps.p.injuryProne / 20f) * (1f + (100f - ps.cond) / 150f) * fit * conditions.injuryMultiplier
         if (rf() > pr) return
         ps.injured = true
         val tbl = intArrayOf(1, 1, 1, 2, 2, 2, 3, 3, 4, 5, 6, 8, 12, 20)

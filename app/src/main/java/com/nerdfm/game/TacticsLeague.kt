@@ -3,6 +3,12 @@ package com.nerdfm.game
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -29,6 +35,8 @@ fun TacticsScreen(w: World) {
     var info by remember { mutableStateOf<Player?>(null) }
     tick.let { }
     val f = Formations.list[tc.formation]
+    val nextFx = w.humanFixture()
+    val opponent = nextFx?.let { w.clubs[if (it.home == me.id) it.away else it.home] }
 
     fun idAt(code: Int): Int = when {
         code in 0..10 -> me.lineup[code]
@@ -97,28 +105,64 @@ fun TacticsScreen(w: World) {
                 Spacer(Modifier.width(6.dp))
                 T("Auto-pick XI each week", 12)
             }
-            Btn("Pick best XI now") { Lineups.autoPick(w, me); selected = -1; tick++; App.bump() }
+            Btn("Pick best XI now", modifier = Modifier.fillMaxWidth()) { Lineups.autoPick(w, me); selected = -1; tick++; App.bump() }
+            Spacer(Modifier.height(8.dp))
+            T("Next opponent", 13, C.accent, true)
+            if (opponent == null) {
+                T("No upcoming league fixture.", 11, C.muted, lines = 2)
+            } else {
+                val of = Formations.list[opponent.tactics.formation.coerceIn(Formations.list.indices)]
+                T("${opponent.name} · ${of.name}", 12, C.text, true, lines = 2)
+                val ids = opponent.lineup.take(11)
+                for (i in ids.indices) {
+                    val op = w.players[ids[i]]
+                    if (op != null) {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            Cell(of.slots[i].label, 32, C.muted)
+                            Cell(op.name, 104, C.text)
+                            Cell("${op.ovr}", 26, ovrColor(op.ovr), true)
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(6.dp))
-            T("Tap a player, then tap another to swap. Out-of-position players play at a heavy penalty.", 11, C.muted, lines = 4)
+            T("Out-of-position players play at a heavy penalty.", 11, C.muted, lines = 3)
         }
-        Panel(Modifier.weight(1.4f).fillMaxHeight()) {
-            T("Starting XI (${f.name})", 14, C.accent, true)
-            LazyColumn {
-                items(11) { i ->
+        Panel(Modifier.weight(1.4f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+            T("Tactical board · ${f.name}", 14, C.accent, true)
+            T("Drag a shirt onto another to swap positions, or tap players in the lists.", 10, C.muted, lines = 2)
+            Spacer(Modifier.height(4.dp))
+            TacticalPitch(
+                formation = f,
+                playerIds = me.lineup.toList(),
+                players = w.players,
+                editable = true,
+                modifier = Modifier.fillMaxWidth().height(330.dp),
+                selectedIndex = selected,
+                onSwap = { a, b ->
+                    if (a in 0..10 && b in 0..10 && a != b) {
+                        val tmp = me.lineup[a]; me.lineup[a] = me.lineup[b]; me.lineup[b] = tmp
+                        me.autoPick = false; selected = -1; tick++; App.bump()
+                    }
+                }
+            )
+            Spacer(Modifier.height(6.dp))
+            T("Starting XI", 13, C.accent, true)
+            Column {
+                for (i in 0 until 11) {
                     val p = w.players[me.lineup[i]]
                     val slot = f.slots[i]
                     Row(
                         Modifier.fillMaxWidth().background(if (selected == i) C.accent.copy(alpha = 0.3f) else Color.Transparent)
-                            .clickable { tap(i) }.padding(vertical = 5.dp, horizontal = 2.dp),
+                            .clickable { tap(i) }.padding(vertical = 4.dp, horizontal = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Cell(slot.label, 36, C.accent, true)
-                        if (p == null) Cell("-- empty --", 170, C.red) else {
-                            Cell(p.name, 170, if (p.pos != slot && p.pos2 != slot) C.amber else C.text)
-                            Cell("${p.ovrAt(slot)}", 34, ovrColor(p.ovrAt(slot)), true)
-                            Cell("${p.condition.roundToInt()}%", 42, if (p.condition < 70f) C.amber else C.muted)
-                            Cell(p.pos.label, 30, C.muted)
-                            Cell(statusText(p), 56, C.red)
+                        if (p == null) Cell("-- empty --", 110, C.red) else {
+                            Cell(p.name, 110, if (p.pos != slot && p.pos2 != slot) C.amber else C.text)
+                            Cell("${p.ovrAt(slot)}", 30, ovrColor(p.ovrAt(slot)), true)
+                            Cell("${p.condition.roundToInt()}%", 38, if (p.condition < 70f) C.amber else C.muted)
+                            Cell(statusText(p), 45, C.red)
                         }
                     }
                     HorizontalDivider(color = C.line)
@@ -126,8 +170,14 @@ fun TacticsScreen(w: World) {
             }
         }
         Panel(Modifier.weight(1.2f).fillMaxHeight()) {
+            if (opponent != null) {
+                val of = Formations.list[opponent.tactics.formation.coerceIn(Formations.list.indices)]
+                T("Opponent · ${of.name}", 13, C.accent, true)
+                TacticalPitch(of, opponent.lineup.toList(), w.players, editable = false, modifier = Modifier.fillMaxWidth().height(230.dp))
+                Spacer(Modifier.height(6.dp))
+            }
             T("Bench & reserves", 14, C.accent, true)
-            LazyColumn {
+            LazyColumn(Modifier.weight(1f)) {
                 items(7) { i ->
                     val p = w.players[me.bench[i]]
                     Row(
@@ -154,6 +204,96 @@ fun TacticsScreen(w: World) {
             }
         }
     }
+}
+
+/** Interactive, pitch-shaped formation board. Dragging a shirt over another swaps the XI slots. */
+@Composable
+fun TacticalPitch(
+    formation: Formation,
+    playerIds: List<Int>,
+    players: Map<Int, Player>,
+    editable: Boolean,
+    modifier: Modifier = Modifier,
+    selectedIndex: Int = -1,
+    onSwap: (Int, Int) -> Unit = { _, _ -> }
+) {
+    BoxWithConstraints(modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFF174D35))) {
+        val width = maxWidth
+        val height = maxHeight
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = 1.2.dp.toPx()
+            drawRect(Color(0xFF1B5B3E))
+            drawRect(Color.White.copy(alpha = 0.75f), style = Stroke(stroke))
+            drawLine(Color.White.copy(alpha = 0.75f), Offset(size.width / 2f, 0f), Offset(size.width / 2f, size.height), stroke)
+            drawCircle(Color.White.copy(alpha = 0.75f), radius = size.height * 0.12f, center = Offset(size.width / 2f, size.height / 2f), style = Stroke(stroke))
+            drawRect(Color.White.copy(alpha = 0.65f), topLeft = Offset(0f, size.height * 0.30f), size = androidx.compose.ui.geometry.Size(size.width * 0.16f, size.height * 0.40f), style = Stroke(stroke))
+            drawRect(Color.White.copy(alpha = 0.65f), topLeft = Offset(size.width * 0.84f, size.height * 0.30f), size = androidx.compose.ui.geometry.Size(size.width * 0.16f, size.height * 0.40f), style = Stroke(stroke))
+            drawCircle(Color.White.copy(alpha = 0.7f), radius = size.height * 0.008f, center = Offset(size.width / 2f, size.height / 2f))
+        }
+        val positions = remember(formation) { formation.slots.indices.map { pitchPoint(formation.slots, it) } }
+        val pxWidth = with(androidx.compose.ui.platform.LocalDensity.current) { width.toPx() }
+        val pxHeight = with(androidx.compose.ui.platform.LocalDensity.current) { height.toPx() }
+        for (i in formation.slots.indices) {
+            val (x, y) = positions[i]
+            val p = players[playerIds.getOrElse(i) { -1 }]
+            var drag by remember(i, formation.name) { mutableStateOf(Offset.Zero) }
+            Box(
+                Modifier.offset(x = width * x - 29.dp, y = height * y - 21.dp)
+                    .offset { IntOffset(drag.x.roundToInt(), drag.y.roundToInt()) }
+                    .width(58.dp).height(42.dp)
+                    .background(if (selectedIndex == i) C.amber else if (editable) Color(0xFF0D7B50) else Color(0xFF273C8D), RoundedCornerShape(6.dp))
+                    .then(if (editable) Modifier.pointerInput(i, pxWidth, pxHeight, positions) {
+                        detectDragGestures(
+                            onDragEnd = {
+                                val nx = x + drag.x / pxWidth
+                                val ny = y + drag.y / pxHeight
+                                val target = positions.indices.filter { it != i }.minByOrNull { j ->
+                                    val dx = positions[j].first - nx; val dy = positions[j].second - ny
+                                    dx * dx + dy * dy
+                                }
+                                if (target != null) {
+                                    val dx = positions[target].first - nx; val dy = positions[target].second - ny
+                                    if (dx * dx + dy * dy < 0.10f) onSwap(i, target)
+                                }
+                                drag = Offset.Zero
+                            },
+                            onDrag = { change, amount -> change.consume(); drag += amount }
+                        )
+                    } else Modifier)
+                    .padding(2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Text(formation.slots[i].label, color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelSmall)
+                    Text(p?.name?.split(" ")?.lastOrNull()?.take(8) ?: "Empty", color = Color.White, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    if (p != null) Text("${p.ovr}", color = Color(0xFFFFE082), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+    }
+}
+
+private fun pitchPoint(slots: List<Pos>, index: Int): Pair<Float, Float> {
+    val pos = slots[index]
+    val same = slots.indices.filter { slots[it] == pos }
+    val rank = same.indexOf(index)
+    val count = same.size
+    val y = if (count == 1) 0.5f else 0.18f + rank * (0.64f / (count - 1))
+    val x = when (pos) {
+        Pos.GK -> 0.13f
+        Pos.LB, Pos.CB, Pos.RB -> 0.25f
+        Pos.DM -> 0.42f
+        Pos.CM -> 0.50f
+        Pos.LW, Pos.RW -> 0.68f
+        Pos.AM -> 0.73f
+        Pos.ST -> 0.88f
+    }
+    val sideY = when (pos) {
+        Pos.LB, Pos.LW -> 0.12f
+        Pos.RB, Pos.RW -> 0.88f
+        else -> y
+    }
+    return x to sideY
 }
 
 // ------------------------------------------------------------------ league

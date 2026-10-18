@@ -33,6 +33,10 @@ data class MatchAuditReport(
     val homeXg: Double,
     val awayXg: Double,
     val homePossession: Int,
+    val homeYellows: Int,
+    val awayYellows: Int,
+    val homeReds: Int,
+    val awayReds: Int,
     val eventCount: Int,
     val issues: List<MatchAuditIssue>
 ) {
@@ -48,6 +52,8 @@ data class MatchAuditReport(
         append(" | shots ").append(homeShots).append('-').append(awayShots)
         append(" | xG ").append("%.2f".format(homeXg)).append('-').append("%.2f".format(awayXg))
         append(" | possession ").append(homePossession).append('%')
+        append(" | cards Y/R ").append(homeYellows).append('/').append(homeReds)
+            .append('-').append(awayYellows).append('/').append(awayReds)
         if (issues.isNotEmpty()) append(" | audit issues ").append(issues.size)
     }
 }
@@ -132,7 +138,8 @@ object MatchEngineAuditor {
 
         return MatchAuditReport(
             h.club.name, a.club.name, h.goals, a.goals, h.shots, a.shots, h.sot, a.sot,
-            h.xg, a.xg, engine.possessionHome(), engine.events.size, issues.toList()
+            h.xg, a.xg, engine.possessionHome(), h.yellows, a.yellows, h.reds, a.reds,
+            engine.events.size, issues.toList()
         )
     }
 }
@@ -181,6 +188,10 @@ data class MatchBatchReport(
     val awayGoals: DistributionSummary,
     val totalXg: DistributionSummary,
     val totalShots: DistributionSummary,
+    val homePossession: DistributionSummary,
+    val totalYellowCards: DistributionSummary,
+    val totalRedCards: DistributionSummary,
+    val maximumGoalsByOneTeam: Int,
     val homeWinRate: Double,
     val drawRate: Double,
     val awayWinRate: Double,
@@ -194,6 +205,9 @@ data class MatchBatchReport(
             goals.mean, goals.standardDeviation, goals.minimum, goals.maximum))
         appendLine("Home goals: %.2f | Away goals: %.2f".format(homeGoals.mean, awayGoals.mean))
         appendLine("Total xG: %.2f | Shots: %.2f".format(totalXg.mean, totalShots.mean))
+        appendLine("Possession: home mean %.1f%% | yellow cards/match %.2f | red cards/match %.3f".format(
+            homePossession.mean, totalYellowCards.mean, totalRedCards.mean))
+        appendLine("Maximum goals by one team: $maximumGoalsByOneTeam")
         appendLine("Results: home %.1f%%, draw %.1f%%, away %.1f%%".format(
             homeWinRate * 100.0, drawRate * 100.0, awayWinRate * 100.0))
         appendLine("Audit warnings: $warningCount | errors: $errorCount")
@@ -239,6 +253,10 @@ object MatchBatchRunner {
             DistributionSummary.of(audits.map { it.awayGoals.toDouble() }),
             DistributionSummary.of(audits.map { it.totalXg }),
             DistributionSummary.of(audits.map { it.totalShots.toDouble() }),
+            DistributionSummary.of(audits.map { it.homePossession.toDouble() }),
+            DistributionSummary.of(audits.map { (it.homeYellows + it.awayYellows).toDouble() }),
+            DistributionSummary.of(audits.map { (it.homeReds + it.awayReds).toDouble() }),
+            audits.maxOf { max(it.homeGoals, it.awayGoals) },
             homeWins / denominator, draws / denominator, awayWins / denominator,
             audits.sumOf { it.issues.count { i -> i.severity == MatchAuditIssue.Severity.WARNING } },
             audits.sumOf { it.issues.count { i -> i.severity == MatchAuditIssue.Severity.ERROR } }
@@ -279,7 +297,8 @@ data class BalanceTargets(
     val maximumMeanShots: Double = 34.0,
     val maximumAuditErrors: Int = 0,
     val minimumHomeWinRate: Double = 0.20,
-    val maximumHomeWinRate: Double = 0.65
+    val maximumHomeWinRate: Double = 0.65,
+    val maximumGoalsByOneTeam: Int = 9
 )
 
 data class BalanceFinding(
@@ -313,6 +332,12 @@ object MatchBalanceEvaluator {
             targets.maximumMeanShots, "mean shots")
         check("HOME_ADVANTAGE", report.homeWinRate, targets.minimumHomeWinRate,
             targets.maximumHomeWinRate, "home win rate")
+        if (report.maximumGoalsByOneTeam > targets.maximumGoalsByOneTeam) {
+            findings.add(BalanceFinding(
+                "EXTREME_SCORELINE", MatchAuditIssue.Severity.WARNING,
+                report.maximumGoalsByOneTeam.toString(), "at most ${targets.maximumGoalsByOneTeam} goals by one team"
+            ))
+        }
         if (report.errorCount > targets.maximumAuditErrors) {
             findings.add(BalanceFinding(
                 "AUDIT_ERRORS", MatchAuditIssue.Severity.ERROR,
@@ -415,5 +440,53 @@ data class FixtureTrace(
         firstEvents.forEach { appendLine("  $it") }
         appendLine("Closing events:")
         lastEvents.forEach { appendLine("  $it") }
+    }
+}
+
+/**
+ * Reproducible calibration entry point using NerdFM's real match engine and fictional teams.
+ * The default campaign is intentionally explicit so a developer can run 5,000+ fixtures
+ * without putting a costly campaign in every ordinary unit-test invocation.
+ */
+object MatchCalibrationHarness {
+    const val DEFAULT_MATCHES: Int = 5_000
+    const val DEFAULT_SEED: Long = 20261016L
+
+    fun run(matches: Int = DEFAULT_MATCHES, firstSeed: Long = DEFAULT_SEED): MatchBatchReport {
+        require(matches >= 1) { "At least one match is required." }
+        return MatchBatchRunner.run(MatchSeedPlan.range(firstSeed, matches), ::createFixture, failOnAuditError = true)
+    }
+
+    private fun createFixture(seed: Long): MatchEngine {
+        val rnd = Random(seed)
+        val world = World().apply { this.seed = seed }
+        val home = Club(0, "Calibration Home", 0, 60, 20_000, 0xFF2255AAL, 0xFFEEEEEE)
+        val away = Club(1, "Calibration Away", 0, 60, 20_000, 0xFFAA5522L, 0xFFEEEEEE)
+        val positions = Formations.list[0].slots + listOf(
+            Pos.GK, Pos.CB, Pos.CB, Pos.CM, Pos.CM, Pos.LW, Pos.RW
+        )
+
+        fun makeTeam(club: Club): MatchTeam {
+            val roster = positions.mapIndexed { index, pos ->
+                val target = 60f + rnd.nextInt(-3, 4)
+                val player = WorldGen.makePlayer(world, rnd, pos, target, 24 + rnd.nextInt(7), 70)
+                player.clubId = club.id
+                player.id.also { world.players[it] = player; club.players.add(it) }
+                PS(player, pos, (1.0 + rnd.gauss() * 0.025).toFloat())
+            }
+            val tactics = Tactics()
+            tactics.formation = 0
+            tactics.mentality = 0
+            tactics.tempo = 1
+            tactics.pressing = 1
+            tactics.width = 1
+            tactics.line = 1
+            tactics.passing = 1
+            return MatchTeam(club, tactics, roster.take(11), roster.drop(11), true, MatchCalibration())
+        }
+
+        val homeTeam = makeTeam(home)
+        val awayTeam = makeTeam(away)
+        return MatchEngine(homeTeam, awayTeam, rnd, homeTeam.calibration)
     }
 }

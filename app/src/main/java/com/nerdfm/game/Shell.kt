@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
-val NAV = listOf("Inbox", "Squad", "Tactics", "Training", "Staff", "League", "Transfers", "Finance", "Club")
+val NAV = listOf("Inbox", "Squad", "People", "Tactics", "Training", "Staff", "League", "Transfers", "Finance", "Business", "Ecosystem", "Club")
 
 @Composable
 fun GameShell(w: World, tick: Int) {
@@ -31,12 +31,16 @@ fun GameShell(w: World, tick: Int) {
     val scope = App.scope
     var confirm by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    var advancing by remember { mutableStateOf(false) }
     val me = w.human()
     val fx = w.humanFixture()
     val unread = w.news.count { !it.read }
 
     fun runAdvance() {
+        if (advancing || App.busy.isNotEmpty()) return
+        advancing = true
         scope.launch {
+            try {
             if (fx != null) {
                 val f = heavy("Simulating the rest of the round...") { Game.startWeek(w) }
                 if (f != null) {
@@ -52,6 +56,7 @@ fun GameShell(w: World, tick: Int) {
                 withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
                 App.bump()
             }
+            } finally { advancing = false }
         }
     }
 
@@ -78,8 +83,8 @@ fun GameShell(w: World, tick: Int) {
             val label = if (fx != null) {
                 val home = fx.home == me.id
                 (if (home) "Play (H) vs " else "Play (A) vs ") + w.clubs[if (home) fx.away else fx.home].name
-            } else if (w.week == 0) "Begin season" else "Continue"
-            Btn(label) { if (fx != null) confirm = true else runAdvance() }
+            } else if (w.week == 0) "Begin season" else "Advance"
+            Btn(if (advancing) "Advancing…" else label, enabled = !advancing && App.busy.isEmpty()) { if (fx != null) confirm = true else runAdvance() }
         }
         Row(Modifier.weight(1f)) {
             Column(Modifier.width(104.dp).fillMaxHeight().background(C.surface).verticalScroll(rememberScrollState()).padding(top = 4.dp)) {
@@ -98,12 +103,15 @@ fun GameShell(w: World, tick: Int) {
                 when (App.screen) {
                     "Inbox" -> InboxScreen(w)
                     "Squad" -> SquadScreen(w)
+                    "People" -> PeopleScreen(w)
                     "Tactics" -> TacticsScreen(w)
                     "Training" -> TrainingScreen(w)
                     "Staff" -> StaffScreen(w)
                     "League" -> LeagueScreen(w)
                     "Transfers" -> TransferScreen(w)
                     "Finance" -> FinanceScreen(w)
+                    "Business" -> BusinessScreen(w)
+                    "Ecosystem" -> EcosystemScreen(w)
                     "Club" -> ClubScreen(w)
                 }
             }
@@ -164,15 +172,15 @@ fun GameShell(w: World, tick: Int) {
 fun InboxScreen(w: World) {
     val me = w.human()
     val lg = w.leagueOf(me.id)
-    LaunchedEffect(Unit) { /* mark read after a moment */ }
-    DisposableEffect(Unit) { onDispose { for (n in w.news) n.read = true } }
+    var openedNews by remember { mutableStateOf<News?>(null) }
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Panel(Modifier.weight(1.6f).fillMaxHeight()) {
             T("Inbox", 15, C.accent, true)
             if (w.news.isEmpty()) T("No messages.", 12, C.muted)
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(w.news.take(60)) { n ->
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(2.dp)).background(C.card).padding(8.dp)) {
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(2.dp)).background(C.card)
+                        .clickable { openedNews = n }.padding(8.dp)) {
                         Row {
                             T(n.title, 13, if (n.read) C.text else C.accent, true, Modifier.weight(1f))
                             T("${n.year}/${(n.year + 1) % 100} wk ${n.week}", 11, C.muted)
@@ -208,11 +216,83 @@ fun InboxScreen(w: World) {
             }
         }
     }
+    openedNews?.let { n ->
+        AlertDialog(
+            onDismissRequest = { openedNews = null },
+            title = { Text(n.title) },
+            text = { Column {
+                T("${n.year}/${(n.year + 1) % 100} · week ${n.week}", 11, C.muted)
+                Spacer(Modifier.height(8.dp))
+                T(n.body, 14, lines = 12)
+            } },
+            confirmButton = { Btn(if (n.read) "Close message" else "Mark read & close") { n.read = true; openedNews = null; App.bump() } },
+            dismissButton = { TextButton(onClick = { openedNews = null }) { Text("Close unread") } }
+        )
+    }
 }
 
 // ---------------------------------------------------------------- finance
 
 fun upgradeCost(c: Club, level: Int): Long = (c.revenue * 0.05 * (1 + level / 8.0)).toLong()
+
+@Composable
+fun PeopleScreen(w: World) {
+    val club = w.human()
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        T("People & dressing room", 20, C.accent, true)
+        T(PlayerRelations.managerProfile(w), 13, C.muted)
+        Spacer(Modifier.height(8.dp))
+        T("Team cohesion ${club.teamCohesion.roundToInt()}%", 15, C.text, true)
+        Bar(club.teamCohesion / 100f, C.green, Modifier.fillMaxWidth())
+        val leaders = w.squad(club).sortedWith(compareByDescending<Player> { it.attrs[Attr.Leadership.ordinal] }.thenBy { it.id }).take(3)
+        T("Dressing-room leaders", 14, C.text, true)
+        if (leaders.isEmpty()) T("No registered players", 12, C.muted)
+        leaders.forEach { T("${it.name} · leadership ${it.attrs[Attr.Leadership.ordinal]}", 12, C.muted) }
+        T("Board objective", 15, C.text, true)
+        val objectives = listOf("Balanced", "Promotion", "Top half", "Avoid relegation", "Financial stability")
+        objectives.forEachIndexed { index, label ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = club.boardObjective == index, onClick = {
+                    club.boardObjective = index
+                    w.addNews("Board objective updated", "The club's current objective is now $label.")
+                    App.bump()
+                })
+                T(label, 13)
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        T("Media briefing", 15, C.text, true)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Btn("Back squad") { PlayerRelations.mediaInteraction(w, 1); App.bump() }
+            Btn("Balanced") { PlayerRelations.mediaInteraction(w, 0); App.bump() }
+            Btn("Cautious") { PlayerRelations.mediaInteraction(w, -1); App.bump() }
+        }
+        Spacer(Modifier.height(10.dp))
+        T("Player personalities & playing-time promises", 15, C.text, true)
+        T("Promises last eight weeks. Repeatedly missing the promised minutes reduces morale.", 11, C.muted)
+        for (player in w.squad(club).sortedWith(compareByDescending<Player> { it.ovr }.thenBy { it.id })) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                T("${player.name} · ${PlayerRelations.personality(player)} · morale ${player.morale.roundToInt()}%", 12, C.text, true)
+                val promise = if (player.playingTimePromise == 0) "No promise" else "${PlayerRelations.promiseName(player.playingTimePromise)} (${player.promiseWeeksRemaining}w)"
+                T("$promise · apps ${player.apps}", 11, C.muted)
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    for (level in PlayerRelations.PROMISE_ROTATION..PlayerRelations.PROMISE_STAR) {
+                        Btn(listOf("", "Rot.", "Regular", "Important", "Star")[level], enabled = player.injWeeks == 0) {
+                            if (PlayerRelations.promisePlayingTime(w, player.id, level)) App.bump()
+                        }
+                    }
+                    Btn("Clear") {
+                        player.playingTimePromise = PlayerRelations.PROMISE_NONE
+                        player.promiseWeeksRemaining = 0
+                        player.promiseBrokenWeeks = 0
+                        App.bump()
+                    }
+                }
+            }
+            HorizontalDivider()
+        }
+    }
+}
 
 @Composable
 fun FinanceScreen(w: World) {
@@ -377,6 +457,17 @@ fun SackedScreen(w: World) {
                 }
             }
         }
-        Btn("Retire to the main menu") { App.mode = Mode.MENU; App.world = null; Persistence.delete(ctx.filesDir) }
+        Btn("Retire to the main menu") {
+            scope.launch {
+                val archived = withContext(Dispatchers.IO) { Persistence.delete(ctx.filesDir) }
+                if (archived) {
+                    App.mode = Mode.MENU
+                    App.world = null
+                } else {
+                    // Keep the current career open if the archive rename fails.
+                    App.bump()
+                }
+            }
+        }
     }
 }

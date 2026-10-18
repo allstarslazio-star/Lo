@@ -6,10 +6,13 @@ import kotlin.random.Random
 class World : Serializable {
     var saveVersion: Int = Persistence.CURRENT_SAVE_VERSION
     var seed = 0L
+    /** True for careers started with the richer name generator (see NameForge). Older saves read false. */
+    var richNames = false
     var year = 2026
     var week = 0
     var humanClubId = 0
     var manager = "Manager"
+    var managerReputation = 50f
     val players = HashMap<Int, Player>()
     var nextPid = 1
     var nextCoachId = 1
@@ -36,12 +39,31 @@ class World : Serializable {
     var transferFilterMinOverall = 45
     var transferFilterMaxAge = 34
     var transferSearchTab = 0
+    /** Sponsors, clauses, loans and scouts. Null in older saves; created lazily by [biz]. */
+    var business: BusinessState? = null
+    /** Club Ecosystem state (save format 4). Null in older saves; created lazily by [eco]. */
+    var ecosystem: EcosystemState? = null
 
     private companion object {
         private const val serialVersionUID: Long = 1L
     }
 
     fun human(): Club = clubs[humanClubId]
+
+    fun biz(): BusinessState {
+        val existing = business
+        if (existing != null) return existing
+        val created = BusinessState()
+        business = created
+        return created
+    }
+    fun eco(): EcosystemState {
+        val existing = ecosystem
+        if (existing != null) return existing
+        val created = EcosystemState()
+        ecosystem = created
+        return created
+    }
     fun club(id: Int): Club = clubs[id]
     fun leagueOf(clubId: Int): League {
         val t = clubs[clubId].tier
@@ -85,6 +107,10 @@ class World : Serializable {
         var s = 0L
         for (id in c.players) s += players[id]!!.wage
         for (coach in c.coaches) s += coach.wage
+        if (c.human) {
+            val state = business
+            if (state != null) for (scout in state.scouts) s += scout.wage
+        }
         return s
     }
 }

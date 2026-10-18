@@ -18,11 +18,13 @@ sealed class LoadResult {
     object NoSave : LoadResult()
     data class Incompatible(val reason: String, val backupFileName: String? = null) : LoadResult()
     data class Corrupt(val reason: String, val backupFileName: String? = null) : LoadResult()
+    /** A transient/unclassified I/O or runtime failure; the original save is preserved. */
+    data class Unreadable(val reason: String) : LoadResult()
 }
 
 /** File-based by design so persistence can be exercised by local JVM unit tests. */
 object Persistence {
-    const val CURRENT_SAVE_VERSION: Int = 1
+    const val CURRENT_SAVE_VERSION: Int = 10
     private const val SAVE_NAME = "career1.dat"
     private const val TEMP_NAME = "career1.tmp"
     private const val BACKUP_NAME = "career1.bak"
@@ -33,7 +35,47 @@ object Persistence {
     var lastReadBackVerificationNanos: Long = 0L
         private set
 
+    /** End-to-end save duration, including serialization, verification, archive, and rename. */
+    @Volatile
+    var lastSaveDurationNanos: Long = 0L
+        private set
+
     fun exists(directory: File): Boolean = saveFile(directory).isFile
+
+    fun backupExists(directory: File): Boolean = File(directory, BACKUP_NAME).isFile
+
+    /** Explicitly restores the last-good backup only after validating it; the backup is kept. */
+    @Synchronized
+    fun restoreBackup(directory: File): LoadResult {
+        val backup = File(directory, BACKUP_NAME)
+        if (!backup.isFile) return LoadResult.NoSave
+        if (saveFile(directory).exists()) return LoadResult.Unreadable("A current career save already exists. It was left untouched; restore is only offered when the main save is missing.")
+        val validation = readFile(backup)
+        if (validation !is LoadResult.Loaded) return validation
+        return try {
+            val target = saveFile(directory)
+            val pending = File(directory, "career1.restore.tmp")
+            if (pending.exists() && !pending.delete()) return LoadResult.Unreadable("Could not clear a previous restore attempt.")
+            backup.copyTo(pending, overwrite = false)
+            val copied = readFile(pending)
+            if (copied !is LoadResult.Loaded) {
+                pending.delete()
+                return if (copied is LoadResult.Corrupt || copied is LoadResult.Incompatible) copied
+                else LoadResult.Unreadable("The backup copy could not be verified; the original backup was preserved.")
+            }
+            if (target.exists()) {
+                pending.delete()
+                return LoadResult.Unreadable("A current save appeared during restore; it was left untouched and the backup was preserved.")
+            }
+            if (!pending.renameTo(target)) {
+                pending.delete()
+                return LoadResult.Unreadable("Could not restore the backup file; the backup was preserved.")
+            }
+            copied
+        } catch (e: Exception) {
+            LoadResult.Unreadable("Backup restore failed without deleting the backup: ${e.message ?: e.javaClass.simpleName}.")
+        }
+    }
 
     /**
      * Writes and verifies a temporary save before moving the current save out of the way.
@@ -42,6 +84,7 @@ object Persistence {
      */
     @Synchronized
     fun save(directory: File, world: World): Boolean {
+        val saveStart = System.nanoTime()
         val temp = File(directory, TEMP_NAME)
         return try {
             if (!directory.exists() && !directory.mkdirs()) return false
@@ -66,6 +109,7 @@ object Persistence {
         } catch (_: Exception) {
             false
         } finally {
+            lastSaveDurationNanos = System.nanoTime() - saveStart
             if (temp.exists()) temp.delete()
         }
     }
@@ -76,7 +120,7 @@ object Persistence {
         if (!file.exists()) return LoadResult.NoSave
 
         val result = readFile(file)
-        if (result !is LoadResult.Loaded) {
+        if (result is LoadResult.Incompatible || result is LoadResult.Corrupt) {
             val backupName = moveFailedLoadSave(directory, file)
             return when (result) {
                 is LoadResult.Incompatible -> result.copy(backupFileName = backupName ?: result.backupFileName)
@@ -84,15 +128,21 @@ object Persistence {
                 else -> result
             }
         }
+        // Do not move or overwrite the save for an unexpected exception. It may be
+        // recoverable on a later attempt or after a filesystem issue is resolved.
         return result
     }
 
     /** Retiring/deleting a career archives it instead of destroying it. */
     @Synchronized
     fun delete(directory: File): Boolean {
+        // Retirement is an archive operation, not a validation/load operation. Never
+        // deserialize a save merely to retire it; preserve the existing last-good backup.
         val file = saveFile(directory)
         if (!file.exists()) return true
-        return archiveBeforeOverwrite(directory, file)
+        val backup = File(directory, BACKUP_NAME)
+        val destination = if (!backup.exists()) backup else uniqueFile(directory, "career1.retired", ".bak")
+        return file.renameTo(destination)
     }
 
     private fun readFile(file: File): LoadResult {
@@ -103,11 +153,12 @@ object Persistence {
                     "The save contains ${value?.javaClass?.simpleName ?: "no World object"}, not a World."
                 )
             }
-            if (world.saveVersion != CURRENT_SAVE_VERSION) {
+            if (world.saveVersion !in 1..CURRENT_SAVE_VERSION) {
                 return LoadResult.Incompatible(
-                    "Save format ${world.saveVersion} is not supported; this game requires format $CURRENT_SAVE_VERSION."
+                    "Save format ${world.saveVersion} is not supported; this game requires format $CURRENT_SAVE_VERSION or a supported older version."
                 )
             }
+            migrateSave(world)
             normalizeAfterLoad(world)
             LoadResult.Loaded(world)
         } catch (e: InvalidClassException) {
@@ -121,8 +172,56 @@ object Persistence {
         } catch (e: StreamCorruptedException) {
             LoadResult.Corrupt("The save's object stream is corrupted: ${e.message ?: "invalid object stream"}.")
         } catch (e: Exception) {
-            LoadResult.Corrupt("The save could not be read: ${e.message ?: e.javaClass.simpleName}.")
+            LoadResult.Unreadable("The save could not be read safely: ${e.message ?: e.javaClass.simpleName}. The file was left untouched.")
         }
+    }
+
+    /** Migrates compatible Java-serialized saves in memory, one format step at a time. */
+    private fun migrateSave(world: World) {
+        if (world.saveVersion == 1) {
+            // Format 2 adds relationship state (M3).
+            world.managerReputation = 50f
+            for (club in world.clubs) {
+                club.teamCohesion = 55f
+                club.boardObjective = club.boardObjective.coerceIn(0, 4)
+            }
+            for (player in world.players.values) {
+                player.playingTimePromise = 0
+                player.promiseWeeksRemaining = 0
+                player.promiseBrokenWeeks = 0
+            }
+            world.saveVersion = 2
+        }
+        if (world.saveVersion == 2) {
+            // Format 3 adds the business layer (sponsors, clauses, loans, scouts); it is created lazily.
+            world.saveVersion = 3
+        }
+        if (world.saveVersion == 3) {
+            // Format 4 adds the Club Ecosystem holder (World.ecosystem); it is created lazily by World.eco().
+            world.saveVersion = 4
+        }
+        if (world.saveVersion == 4) {
+            // Format 5 adds staff, board and club identity sections inside EcosystemState; each is created lazily.
+            world.saveVersion = 5
+        }
+        if (world.saveVersion == 5) {
+            // Format 6 adds the medical section (workloads, injury history, rehab policy); it is created lazily.
+            world.saveVersion = 6
+        }
+        if (world.saveVersion == 6 || world.saveVersion == 7) {
+            // Format 7 is reserved for the unfinished analytics milestone (M3). Format 8 adds the people section
+            // (languages, culture, relationships, events); it is created lazily and absent in older saves.
+            world.saveVersion = 8
+        }
+        if (world.saveVersion == 8) {
+            // Format 9 adds fans, stadium, pitch, facilities and media (EnvState); created lazily.
+            world.saveVersion = 9
+        }
+        if (world.saveVersion == 9) {
+            // Format 10 adds the fixture calendar (cups, continental competition, international windows); created lazily.
+            world.saveVersion = 10
+        }
+        world.saveVersion = CURRENT_SAVE_VERSION
     }
 
     /** Repairs only absent optional learning/AI state; existing state is never reset. */
@@ -135,6 +234,12 @@ object Persistence {
         for (club in world.clubs) {
             if (club.managerGenome == null) club.managerGenome = ManagerGenome()
         }
+        // A save written mid-match may carry applied ecosystem deltas; take them off before play resumes.
+        Ecosystem.endMatch(world)
+        MedicalRules.repair(world)
+        People.repair(world)
+        ClubEnvRules.repair(world)
+        FixtureCalendar.repair(world)
     }
 
     private fun archiveBeforeOverwrite(directory: File, current: File): Boolean {

@@ -17,6 +17,36 @@ import org.junit.rules.TemporaryFolder
 class PersistenceTest {
     @get:Rule val temp = TemporaryFolder()
 
+
+    @Test fun missingMainSaveCanRestoreLastGoodBackupWithoutConsumingIt() {
+        val directory = temp.newFolder("restore-last-good")
+        val original = World().apply { year = 2044 }
+        assertTrue(Persistence.save(directory, original))
+        assertTrue(Persistence.save(directory, World().apply { year = 2045 }))
+        assertTrue(File(directory, "career1.dat").delete())
+        val backup = File(directory, "career1.bak")
+        assertTrue(backup.isFile)
+
+        val result = Persistence.restoreBackup(directory)
+
+        assertTrue(result is LoadResult.Loaded)
+        assertEquals(2044, (result as LoadResult.Loaded).world.year)
+        assertTrue("restore must keep the backup", backup.isFile)
+        assertEquals(2044, (Persistence.load(directory) as LoadResult.Loaded).world.year)
+    }
+
+    @Test fun unexpectedReadFailureLeavesTheOriginalSaveInPlace() {
+        val directory = temp.newFolder("non-destructive-read-error")
+        val savePath = File(directory, "career1.dat")
+        assertTrue(savePath.mkdir()) // FileInputStream cannot read a directory; this is not proven corruption.
+
+        val result = Persistence.load(directory)
+
+        assertTrue(result is LoadResult.Unreadable)
+        assertTrue("unexpected errors must not move the source", savePath.isDirectory)
+        assertFalse(File(directory, "career1.failed-load.bak").exists())
+    }
+
     @Test fun saveAndLoadRoundTripPreservesCareerState() {
         val directory = temp.newFolder("round-trip")
         val world = World().apply {
@@ -42,21 +72,21 @@ class PersistenceTest {
         assertTrue(Persistence.load(temp.newFolder("missing")) is LoadResult.NoSave)
     }
 
-    @Test fun lowerSaveVersionIsIncompatibleAndMovedToFailedLoadBackup() {
-        val directory = temp.newFolder("old-version")
-        val oldWorld = World().apply { saveVersion = Persistence.CURRENT_SAVE_VERSION - 1 }
+    @Test fun versionOneSaveMigratesToCurrentRelationshipSchema() {
+        val directory = temp.newFolder("version-one-migration")
+        val oldWorld = World().apply {
+            saveVersion = 1
+            humanClubId = 0
+        }
         writeCompressedObject(File(directory, "career1.dat"), oldWorld)
 
         val result = Persistence.load(directory)
 
-        assertTrue(result is LoadResult.Incompatible)
-        val backupName = (result as LoadResult.Incompatible).backupFileName
-        assertNotNull(backupName)
-        assertTrue(File(directory, backupName!!).isFile)
-        assertFalse(File(directory, "career1.dat").exists())
-        assertFalse(File(directory, "career1.bak").exists())
+        assertTrue("version 1 should migrate", result is LoadResult.Loaded)
+        assertEquals(Persistence.CURRENT_SAVE_VERSION, (result as LoadResult.Loaded).world.saveVersion)
+        assertEquals(50f, result.world.managerReputation, 0.001f)
+        assertTrue(File(directory, "career1.dat").isFile)
     }
-
 
     @Test fun invalidClassDescriptorIsIncompatible() {
         val directory = temp.newFolder("invalid-class-descriptor")
@@ -197,8 +227,9 @@ class PersistenceTest {
             samples.add(Persistence.lastReadBackVerificationNanos)
         }
         assertTrue("verification timer should be populated", samples.all { it > 0L })
+        assertTrue("full save timer should be populated", Persistence.lastSaveDurationNanos > 0L)
         val medianNanos = samples.sorted()[samples.size / 2]
-        println("Persistence read-back verification median (3 generated-career saves): ${"%.3f".format(medianNanos / 1_000_000.0)} ms; samples=${samples.map { "%.3f".format(it / 1_000_000.0) }} ms")
+        println("Persistence read-back verification median (3 generated-career saves): ${"%.3f".format(medianNanos / 1_000_000.0)} ms; last full save: ${"%.3f".format(Persistence.lastSaveDurationNanos / 1_000_000.0)} ms; samples=${samples.map { "%.3f".format(it / 1_000_000.0) }} ms")
     }
 
 

@@ -190,6 +190,10 @@ class Player(
     var trainingFocus = "Balanced"
     var trainingIntensity = 1 // 0 light, 1 normal, 2 intensive
     var morale = 70f
+    /** 0=none, 1=rotation, 2=regular, 3=important, 4=star; persisted for playing-time promises. */
+    var playingTimePromise = 0
+    var promiseWeeksRemaining = 0
+    var promiseBrokenWeeks = 0
     var form = 60f
     var injWeeks = 0
     var injType = ""
@@ -252,7 +256,7 @@ class Club(
     val name: String,
     var tier: Int,
     var rep: Int,
-    val stadiumBase: Int,
+    var stadiumBase: Int,
     val colorA: Long,
     val colorB: Long
 ) : Serializable {
@@ -273,6 +277,9 @@ class Club(
     val bench = IntArray(7) { -1 }
     var autoPick = true
     var boardConfidence = 60f
+    /** 0=balanced, 1=promotion, 2=top-half, 3=avoid-relegation, 4=financial-stability. */
+    var boardObjective = 0
+    var teamCohesion = 55f
     var weeklyIncome = 0L
     var weeklyExpense = 0L
     var seasonStartBalance = 0L

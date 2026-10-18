@@ -35,6 +35,10 @@ fun MatchScreen(w: World) {
     var playing by remember { mutableStateOf(false) }
     var speed by remember { mutableIntStateOf(0) }
     var showSub by remember { mutableStateOf(false) }
+    var processingResult by remember { mutableStateOf(false) }
+    var matchApplied by remember { mutableStateOf(fx.played) }
+    var weekCompleted by remember { mutableStateOf(false) }
+    var resultError by remember { mutableStateOf("") }
     ver.let { }
 
     LaunchedEffect(playing, speed) {
@@ -62,6 +66,8 @@ fun MatchScreen(w: World) {
             T(eng.away.club.name, 16, if (eng.away === mine) C.accent else C.text, true, Modifier.weight(1f).padding(start = 12.dp))
             T(if (eng.finished) "FT" else if (eng.atHalfTime) "HT" else eng.label(), 16, C.amber, true)
         }
+        T("Match conditions: ${eng.conditions.summary}", 11, C.muted, modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp))
+        T("Referee: " + Referees.describe(Referees.forMatch(w, eng.home.club.id, eng.away.club.id, w.year, w.week)), 11, C.muted, modifier = Modifier.padding(horizontal = 10.dp, vertical = 1.dp))
         Row(Modifier.weight(1f).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // controls
             Panel(Modifier.width(190.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
@@ -90,19 +96,38 @@ fun MatchScreen(w: World) {
                     val motm = eng.manOfTheMatch()
                     if (motm != null) T("Man of the match: ${motm.p.name} (${"%.1f".format(motm.rating.coerceIn(3f, 10f))})", 12, lines = 3)
                     Spacer(Modifier.height(8.dp))
-                    Btn("Continue", modifier = Modifier.fillMaxWidth()) {
-                        scope.launch {
-                            heavy("Processing results...") {
-                                Game.finishHuman(w, fx, eng)
-                                Game.completeWeek(w)
+                    Btn(
+                        when { processingResult -> "Processing results…"; matchApplied && weekCompleted -> "Retry saving…"; else -> "Continue to next day" },
+                        enabled = !processingResult, modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (!processingResult) {
+                            processingResult = true
+                            resultError = ""
+                            scope.launch {
+                                try {
+                                    if (!matchApplied) {
+                                        heavy("Processing match result...") { Game.finishHuman(w, fx, eng) }
+                                        matchApplied = true
+                                    }
+                                    if (!weekCompleted) {
+                                        heavy("Completing the week...") { Game.completeWeek(w) }
+                                        weekCompleted = true
+                                    }
+                                    val saved = withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
+                                    if (!saved) throw IllegalStateException("save verification failed")
+                                    App.engine = null
+                                    App.pendingFixture = null
+                                    App.mode = Mode.GAME
+                                    App.bump()
+                                } catch (e: Exception) {
+                                    resultError = "Could not finish saving: ${e.message ?: "unknown error"}. Tap to retry without reprocessing the match."
+                                } finally {
+                                    processingResult = false
+                                }
                             }
-                            withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
-                            App.engine = null
-                            App.pendingFixture = null
-                            App.mode = Mode.GAME
-                            App.bump()
                         }
                     }
+                    if (resultError.isNotEmpty()) T(resultError, 11, C.red, lines = 4)
                 }
                 Spacer(Modifier.height(10.dp))
                 T("Live instructions", 12, C.accent, true)
@@ -147,11 +172,33 @@ fun MatchScreen(w: World) {
                 StatLine("Yellows", "${eng.home.yellows}", "${eng.away.yellows}")
                 StatLine("Reds", "${eng.home.reds}", "${eng.away.reds}")
                 Spacer(Modifier.height(8.dp))
-                T("Your XI", 13, C.accent, true)
+                T("Your XI · ${Formations.list[mine.tactics.formation.coerceIn(Formations.list.indices)].name}", 13, C.accent, true)
+                TacticalPitch(
+                    formation = Formations.list[mine.tactics.formation.coerceIn(Formations.list.indices)],
+                    playerIds = mine.onPitch.map { it.p.id }, players = w.players, editable = false,
+                    modifier = Modifier.fillMaxWidth().height(210.dp)
+                )
                 for (ps in mine.onPitch) {
                     Row {
                         Cell(ps.slot.label, 30, C.muted)
-                        Cell(ps.p.name, 112, if (ps.injured) C.red else C.text)
+                        PlayerTag(w, ps.p, 160.dp, if (ps.injured) C.red else C.text, false, 20.dp)
+                        Cell("${ps.cond.roundToInt()}%", 38, if (ps.cond < 60f) C.amber else C.muted)
+                        Cell("%.1f".format(ps.rating.coerceIn(3f, 10f)), 30, C.text, true)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                val oppTeam = if (mine === eng.home) eng.away else eng.home
+                val oppFormation = Formations.list[oppTeam.tactics.formation.coerceIn(Formations.list.indices)]
+                T("Opponent XI · ${oppTeam.club.name} · ${oppFormation.name}", 13, C.accent, true, lines = 2)
+                TacticalPitch(
+                    formation = oppFormation,
+                    playerIds = oppTeam.onPitch.map { it.p.id }, players = w.players, editable = false,
+                    modifier = Modifier.fillMaxWidth().height(210.dp)
+                )
+                for (ps in oppTeam.onPitch) {
+                    Row {
+                        Cell(ps.slot.label, 30, C.muted)
+                        PlayerTag(w, ps.p, 160.dp, if (ps.injured) C.red else C.text, false, 20.dp)
                         Cell("${ps.cond.roundToInt()}%", 38, if (ps.cond < 60f) C.amber else C.muted)
                         Cell("%.1f".format(ps.rating.coerceIn(3f, 10f)), 30, C.text, true)
                     }
