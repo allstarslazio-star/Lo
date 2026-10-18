@@ -19,3 +19,8 @@ STILL BROKEN / NOT DONE (CI will still fail until these are fixed):
 - MainActivity.kt: App now has focusPlayerId, tutorial/tutorialTick, notices, diagnosticsText, deviceLabel, initSettings(), navigate(String) and navigate(NavTarget).
 - Shell.kt: NAV and the screen switch now include Home, Players and Diagnostics; TutorialBanner is shown under the top bar.
 - Items 2 (NameForge re-measure), 3 (GoldenBaseline decision) and 4 (Phase 11 port) are untouched. Expect further compile errors in CI.
+
+## Update 2 (after CI run 39114628341: compile + assembleDebug OK, 371 tests, 4 failed)
+- App glue COMPILED in CI. UI compile errors are gone.
+- NameForge (static change, not re-run): list-surname share 0.40 -> 0.25, syllable mid-part chance 1/3 -> 1/2, patronymics drawn from first+classic names (Nordheim), fixDuplicates now checks every existing name so a rename can't cascade into a second rename.
+- Still failing before this change: GoldenBaselineTest x2 (realGamePathAveragesMatchTheGoldenBands, everyClubAtMaximumBoostOrPenaltyStaysInsideTheGoldenBands). Needs a decision plus the measured numbers from the test report artifact.

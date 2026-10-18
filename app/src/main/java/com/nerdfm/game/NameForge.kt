@@ -151,14 +151,14 @@ object NameForge {
     }
 
     private fun syllableSurname(nd: NationDef, rnd: Random): String {
-        val mid = if (rnd.nextInt(3) == 0) pick(nd.mid, rnd) else ""
+        val mid = if (rnd.nextInt(2) == 0) pick(nd.mid, rnd) else ""
         return titleCase(glue(glue(pick(nd.pre, rnd), mid), pick(nd.suf, rnd)))
     }
 
     private fun baseSurname(nat: Int, rnd: Random): String {
         val nd = Names.nations[Math.floorMod(nat, Names.nations.size)]
         val fl = flavour(nat)
-        return if (rnd.nextFloat() < 0.40f) pick(fl.surnames, rnd) else syllableSurname(nd, rnd)
+        return if (rnd.nextFloat() < 0.25f) pick(fl.surnames, rnd) else syllableSurname(nd, rnd)
     }
 
     private fun classicShare(age: Int): Float = when {
@@ -201,7 +201,7 @@ object NameForge {
         var pattern = if (mixed) "mixed" else "plain"
         var surname: String
         if (hf.patronymic != null && rnd.nextFloat() < hf.patronymicChance) {
-            surname = titleCase(pick(hd.first, rnd).lowercase()) + hf.patronymic
+            surname = titleCase(pick(hd.first + hf.classic, rnd).lowercase()) + hf.patronymic
             pattern = "patronymic"
         } else {
             surname = baseSurname(heritage, rnd)
@@ -255,14 +255,18 @@ object NameForge {
      */
     fun fixDuplicates(w: World): Int {
         if (!w.richNames) return 0
+        val players = w.players.values.sortedBy { it.id }
+        // Every name already in use, so a replacement can never collide with a LATER player and cascade into a second rename.
+        val taken = HashSet<String>()
+        for (p in players) taken.add(p.name)
         val seen = HashSet<String>()
         var fixed = 0
-        for (p in w.players.values.sortedBy { it.id }) {
+        for (p in players) {
             if (seen.add(p.name)) continue
             for (attempt in 0 until 12) {
                 val r = Random(Mix.h(w.seed, p.id.toLong(), 7900L, attempt.toLong()))
                 val candidate = make(p.nation, r, NameOptions(age = p.age)).full
-                if (seen.add(candidate)) { p.name = candidate; fixed++; break }
+                if (taken.add(candidate)) { seen.add(candidate); p.name = candidate; fixed++; break }
             }
         }
         return fixed
