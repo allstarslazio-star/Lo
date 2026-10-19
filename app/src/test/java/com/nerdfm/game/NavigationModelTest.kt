@@ -140,7 +140,7 @@ class NavigationModelTest {
         assertEquals(Destination.ALL.size, Destination.ALL.map { it.screen }.toSet().size)
         assertEquals(Destination.ALL.size, Destination.PRIMARY.size + Destination.SECONDARY.size)
         // every screen key the Shell can render
-        val shellScreens = setOf("Home", "Inbox", "Squad", "Players", "People", "Tactics", "Training", "Staff", "League", "Transfers", "Finance", "Business", "Club", "Diagnostics")
+        val shellScreens = setOf("Home", "Inbox", "Squad", "Players", "People", "Tactics", "Training", "Staff", "League", "Transfers", "Finance", "Business", "Ecosystem", "Club", "Diagnostics")
         assertEquals(shellScreens, Destination.ALL.map { it.screen }.toSet())
     }
 

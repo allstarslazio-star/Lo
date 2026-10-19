@@ -89,7 +89,7 @@ object MedicalRules {
 
     /** Doctor and physios: faster, safer diagnosis and rehab. */
     fun diagnosisQuality(w: World, clubId: Int): Float =
-        (0.6f * Staffing.centered(w, clubId, StaffRole.DOCTOR) + 0.4f * Staffing.centered(w, clubId, StaffRole.PHYSIO)).coerceIn(-1f, 1f)
+        (0.6f * Staffing.centered(w, clubId, StaffRole.DOCTOR) + 0.4f * Staffing.centered(w, clubId, StaffRole.PHYSIO) + ClubEnvRules.facilityBonus(w, clubId, "MEDICAL", 0.1f)).coerceIn(-1f, 1f)
 
     /** Sports scientist and fitness coach: how well workloads are tracked and managed. */
     fun monitoringQuality(w: World, clubId: Int): Float =
@@ -105,8 +105,8 @@ object MedicalRules {
     /** Weekly load of one player: the minutes he played plus his training intensity. */
     fun weeklyLoad(p: Player): Float = p.lastMinutes / 90f * 100f + when (p.trainingIntensity) { 0 -> 0f; 2 -> 35f; else -> 15f }
 
-    private fun updateLoad(p: Player, pm: PlayerMedical) {
-        val load = weeklyLoad(p)
+    private fun updateLoad(w: World, p: Player, pm: PlayerMedical) {
+        val load = weeklyLoad(p) + FixtureCalendar.midweekMinutes(w, p.id) / 90f * 100f
         if (!pm.seeded) { pm.acute = load; pm.chronic = load; pm.seeded = true; return }
         pm.acute = 0.5f * pm.acute + 0.5f * load
         pm.chronic = 0.9f * pm.chronic + 0.1f * load
@@ -133,7 +133,7 @@ object MedicalRules {
             val policy = if (c.human) s.policy else RehabPolicy.STANDARD
             for (p in w.squad(c)) {
                 val pm = s.players.getOrPut(p.id) { PlayerMedical() }
-                updateLoad(p, pm)
+                updateLoad(w, p, pm)
                 if (p.injWeeks > 0 && pm.lastInjWeeks == 0) {
                     diagnose(w, s, c, p, pm, diag, policy, rnd, relapse = false)
                 } else if (p.injWeeks > 0) {

@@ -1,6 +1,7 @@
 package com.nerdfm.game
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
@@ -8,7 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 /** Club Ecosystem hub. Each milestone adds tabs here; every tab is a separate Composable in its own file. */
-private val ECO_TABS = listOf("Organisation", "Medical", "Analytics", "Board", "Identity", "People", "Fans", "Facilities", "Media", "Calendar")
+private val ECO_TABS = listOf("Organisation", "People", "Medical", "Analytics", "Board", "Identity", "Fans", "Facilities", "Media", "Calendar", "Preparation")
 
 @Composable
 fun EcosystemScreen(w: World) {
@@ -17,20 +18,21 @@ fun EcosystemScreen(w: World) {
     tick.let { }
     val refresh: () -> Unit = { tick++; App.bump() }
     Column(Modifier.fillMaxSize()) {
-        Seg(ECO_TABS, tab, { tab = it })
+        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) { Seg(ECO_TABS, tab, { tab = it }) }
         Spacer(Modifier.height(6.dp))
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 0 -> OrganisationTab(w, refresh)
-                1 -> MedicalTab(w, refresh)
-                2 -> AnalyticsTab(w, refresh)
-                3 -> BoardTab(w, refresh)
-                4 -> IdentityTab(w)
-                5 -> PeopleTab(w, refresh)
+                1 -> PeopleTab(w, refresh)
+                2 -> MedicalTab(w, refresh)
+                3 -> AnalyticsTab(w, refresh)
+                4 -> BoardTab(w, refresh)
+                5 -> IdentityTab(w)
                 6 -> FansTab(w, refresh)
                 7 -> FacilitiesTab(w, refresh)
                 8 -> MediaTab(w, refresh)
-                else -> CalendarTab(w)
+                9 -> CalendarTab(w)
+                else -> PreparationTab(w, refresh)
             }
         }
     }

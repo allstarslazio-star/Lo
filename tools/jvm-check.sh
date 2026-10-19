@@ -15,9 +15,9 @@ JUNIT="$(ls "$GRADLE_LIB"/junit-4*.jar | head -1):$(ls "$GRADLE_LIB"/hamcrest-co
 OUT="${OUT:-$(mktemp -d)}"
 MAIN="$ROOT/app/src/main/java/com/nerdfm/game"
 TEST="$ROOT/app/src/test/java/com/nerdfm/game"
-UI="BusinessUi MainActivity Management MatchUi Menu Shell Squad TacticsLeague Theme TransferUi HomeUi DiagnosticsUi PlayerBrowserUi UiComponents"
+UI="BusinessUi MainActivity Management MatchUi Menu Shell Squad TacticsLeague Theme TransferUi"
 FILES=()
-for f in "$MAIN"/*.kt; do b="$(basename "$f" .kt)"; case " $UI " in *" $b "*) ;; *) FILES+=("$f");; esac; done
+for f in "$MAIN"/*.kt; do b="$(basename "$f" .kt)"; case " $UI " in *" $b "*) continue;; esac; if grep -qE '^import (androidx|android)\.' "$f"; then continue; fi; FILES+=("$f"); done
 echo "compiling ${#FILES[@]} main + $(ls "$TEST"/*.kt | wc -l) test files with Kotlin $VER ..."
 LOG="$(mktemp)"
 java -cp "$CP" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -cp "$STD:$JUNIT" -jvm-target 17 -d "$OUT" "${FILES[@]}" "$TEST"/*.kt > "$LOG" 2>&1 || true

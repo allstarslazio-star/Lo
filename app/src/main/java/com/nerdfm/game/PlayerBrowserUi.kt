@@ -44,7 +44,7 @@ fun PlayersScreen(w: World) {
             1 -> w.shortlist.mapNotNull { w.players[it] }
             else -> w.players.values.toList()
         }
-        PlayerQuery.run(w, source, filter, sort, overallOf = { shownOvr(w, it) }, potentialOf = { it.pa })
+        PlayerQuery.run(w, source, filter, sort, overallOf = shownOvrFn(w), potentialOf = { it.pa })
     }
     val shown = if (scope == 2) result.players.take(300) else result.players
 

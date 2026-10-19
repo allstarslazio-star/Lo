@@ -25,36 +25,6 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-fun isKnown(w: World, p: Player): Boolean = p.clubId == w.humanClubId || w.scouted.contains(p.id)
-
-fun scoutErr(w: World): Float = Analytics.scoutError(w)
-
-fun shownAttr(w: World, p: Player, i: Int): Int {
-    if (isKnown(w, p)) return p.attrs[i]
-    val noise = (((p.id * 7919 + i * 104729) % 5) + 5) % 5 - 2
-    return clampI(p.attrs[i] + (noise * scoutErr(w)).roundToInt(), 1, 20)
-}
-
-fun attrText(w: World, p: Player, i: Int): String {
-    val s = shownAttr(w, p, i)
-    if (isKnown(w, p)) return "$s"
-    val e = ceil(scoutErr(w) * 1.5f).toInt()
-    return if (e <= 0) "$s" else "${max(1, s - e)}-${min(20, s + e)}"
-}
-
-fun shownOvr(w: World, p: Player): Int {
-    if (isKnown(w, p)) return p.ovr
-    val a = IntArray(NATTR) { shownAttr(w, p, it) }
-    return Roles.overall(a, p.pos).roundToInt()
-}
-
-fun potText(w: World, p: Player): String {
-    if (isKnown(w, p)) return "%.1f".format(p.pa / 20f)
-    val lo = max(0f, (p.pa - 10) / 20f)
-    val hi = min(5f, (p.pa + 10) / 20f)
-    return "%.1f-%.1f".format(lo, hi)
-}
-
 fun statusText(p: Player): String = when {
     p.injWeeks > 0 -> "Inj ${p.injWeeks}w"
     p.suspWeeks > 0 -> "Susp"
@@ -71,6 +41,10 @@ fun SquadScreen(w: World) {
     var sortKey by remember { mutableStateOf("pos") }
     var tick by remember { mutableIntStateOf(0) }
     tick.let { }
+    val focus = App.focusPlayerId
+    LaunchedEffect(focus) {
+        if (focus != null) { sel = w.players[focus]; App.focusPlayerId = null }
+    }
     var list = w.squad(me)
     list = when (tab) {
         1 -> list.filter { it.pos.group == 0 }

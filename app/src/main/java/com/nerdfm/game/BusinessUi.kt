@@ -294,7 +294,7 @@ private fun LoanInPanel(w: World, refresh: () -> Unit) {
         w.players.values.filter { p ->
             p.clubId >= 0 && p.clubId != me.id && p.age <= 32 && groupMatches(p, group) &&
                 Loans.loanInProblem(w, p, 50) == null
-        }.sortedByDescending { shownOvr(w, it) }.take(25)
+        }.let { l -> val ovr = shownOvrFn(w); l.map { it to ovr(it) }.sortedByDescending { it.second }.take(25).map { it.first } }
     }
     Panel(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         T("Loan players in", 15, C.accent, true)

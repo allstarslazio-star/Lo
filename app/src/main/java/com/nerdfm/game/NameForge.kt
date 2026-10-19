@@ -60,7 +60,7 @@ object NameForge {
         "Valdoria" to Flavour(
             l("Giuseppe Antonio Carlo Franco Mario Paolo Bruno Gianni Piero Vittorio Salvo Lorenzo Renato Aurelio Claudio Ettore Ignazio Silvio"),
             l("Giulia Chiara Sofia Elena Marta Lucia Federica Alessia Bianca Serena Ilaria Camilla Valentina Francesca Beatrice Silvia Noemi Paola Greta Elisa"),
-            l("Rossetti Bianchini Moretti Carbone Ferraro Bellini Gallo Conti Lombardi Marchetti Costa Fontana Santoro Barbieri Pellegrini Monti Ricci Sartori Vitale Orlandi Greco Caruso Neri Basile Ferrari Gentile Leone Mancini Palumbo Rinaldi Colombo Fabbri Serra Testa Longo Villa"),
+            l("Rossetti Bianchini Moretti Carbone Ferraro Bellini Gallo Conti Lombardi Marchetti Costa Fontana Santoro Barbieri Pellegrini Monti Ricci Sartori Vitale Orlandi Greco Caruso Neri Basile"),
             particles = l("di de"), particleChance = 0.04f),
         "Nordheim" to Flavour(
             l("Gunnar Harald Knut Arne Bjarne Torstein Halvor Einar Trygve Rolf Sigurd Odd Hakon Thor Gustav Birger Stig Vidar"),
@@ -151,14 +151,14 @@ object NameForge {
     }
 
     private fun syllableSurname(nd: NationDef, rnd: Random): String {
-        val mid = if (rnd.nextInt(2) == 0) pick(nd.mid, rnd) else ""
+        val mid = if (rnd.nextInt(3) == 0) pick(nd.mid, rnd) else ""
         return titleCase(glue(glue(pick(nd.pre, rnd), mid), pick(nd.suf, rnd)))
     }
 
     private fun baseSurname(nat: Int, rnd: Random): String {
         val nd = Names.nations[Math.floorMod(nat, Names.nations.size)]
         val fl = flavour(nat)
-        return if (rnd.nextFloat() < 0.25f) pick(fl.surnames, rnd) else syllableSurname(nd, rnd)
+        return if (rnd.nextFloat() < 0.55f) pick(fl.surnames, rnd) else syllableSurname(nd, rnd)
     }
 
     private fun classicShare(age: Int): Float = when {
@@ -201,22 +201,23 @@ object NameForge {
         var pattern = if (mixed) "mixed" else "plain"
         var surname: String
         if (hf.patronymic != null && rnd.nextFloat() < hf.patronymicChance) {
-            surname = titleCase(pick(hd.first + hf.classic, rnd).lowercase()) + hf.patronymic
+            surname = titleCase(pick(hd.first, rnd).lowercase()) + hf.patronymic
             pattern = "patronymic"
         } else {
             surname = baseSurname(heritage, rnd)
         }
-        fun gendered(name: String): String {
-            if (o.gender != Gender.FEMALE) return name
-            for ((from, to) in hf.femaleEnd) if (name.endsWith(from)) return name.dropLast(from.length) + to
-            return name
+        // Every part of a compound surname takes the feminine form, not only the first.
+        fun feminine(part: String): String {
+            if (o.gender != Gender.FEMALE) return part
+            for ((from, to) in hf.femaleEnd) if (part.endsWith(from)) return part.dropLast(from.length) + to
+            return part
         }
-        surname = gendered(surname)
+        surname = feminine(surname)
         if (hf.doubleChance > 0f && rnd.nextFloat() < hf.doubleChance) {
-            val second = gendered(baseSurname(heritage, rnd))
+            val second = feminine(baseSurname(heritage, rnd))
             if (second != surname) { surname = "$surname $second"; pattern = "double" }
         } else if (hf.hyphenChance > 0f && rnd.nextFloat() < hf.hyphenChance) {
-            val second = gendered(baseSurname(heritage, rnd))
+            val second = feminine(baseSurname(heritage, rnd))
             if (second != surname) { surname = "$surname-$second"; pattern = "hyphen" }
         }
         if (hf.prefixes.isNotEmpty() && rnd.nextFloat() < hf.prefixChance) {
@@ -255,18 +256,14 @@ object NameForge {
      */
     fun fixDuplicates(w: World): Int {
         if (!w.richNames) return 0
-        val players = w.players.values.sortedBy { it.id }
-        // Every name already in use, so a replacement can never collide with a LATER player and cascade into a second rename.
-        val taken = HashSet<String>()
-        for (p in players) taken.add(p.name)
         val seen = HashSet<String>()
         var fixed = 0
-        for (p in players) {
+        for (p in w.players.values.sortedBy { it.id }) {
             if (seen.add(p.name)) continue
             for (attempt in 0 until 12) {
                 val r = Random(Mix.h(w.seed, p.id.toLong(), 7900L, attempt.toLong()))
                 val candidate = make(p.nation, r, NameOptions(age = p.age)).full
-                if (taken.add(candidate)) { seen.add(candidate); p.name = candidate; fixed++; break }
+                if (seen.add(candidate)) { p.name = candidate; fixed++; break }
             }
         }
         return fixed

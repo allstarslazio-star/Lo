@@ -15,7 +15,7 @@ class MigrationFailedException(val fromVersion: Int, message: String, cause: Thr
 object SaveMigrations {
     class Step(val from: Int, val to: Int, val description: String, val migrate: (World) -> Unit)
 
-    /** The real upgrade path, one step per format. Behaviour is identical to the inline migration it replaces. */
+    /** The real upgrade path. Behaviour is identical to the inline migration it replaces. */
     val DEFAULT_STEPS: List<Step> = listOf(
         Step(1, 2, "relationship state (M3)") { world ->
             world.managerReputation = 50f
@@ -31,12 +31,13 @@ object SaveMigrations {
         },
         Step(2, 3, "business layer (created lazily by World.biz())") { },
         Step(3, 4, "club ecosystem holder (created lazily by World.eco())") { },
-        Step(4, 5, "staff, board and club identity sections (created lazily)") { },
-        Step(5, 6, "medical section: workloads, injury history, rehab policy (created lazily)") { },
-        Step(6, 7, "format 7 was reserved for the unfinished analytics milestone; nothing to convert") { },
-        Step(7, 8, "people section: languages, culture, relationships, events (created lazily)") { },
-        Step(8, 9, "environment section: fans, stadium, pitch, facilities, media (created lazily)") { },
-        Step(9, 10, "fixture calendar: cups, continental competition, international windows (created lazily)") { }
+        Step(4, 5, "staff, board and club identity sections (lazy)") { },
+        Step(5, 6, "medical section (lazy)") { },
+        Step(6, 7, "analytics section (lazy)") { },
+        Step(7, 8, "people section (lazy)") { },
+        Step(8, 9, "fans, stadium, pitch, facilities, media (lazy)") { },
+        Step(9, 10, "fixture calendar (lazy)") { },
+        Step(10, 11, "preparation: tactical familiarity, set pieces (lazy)") { }
     )
 
     @Volatile private var active: List<Step> = DEFAULT_STEPS

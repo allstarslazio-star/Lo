@@ -79,7 +79,7 @@ object Analytics {
     fun dataLevel(w: World, club: Club): Float {
         if (!Ecosystem.enabled) return 50f
         val planShift = planOf(w, club).bonus - defaultPlan(club.tier).bonus
-        return (50f + 28f * analystQuality(w, club.id) + 14f * recruitmentQuality(w, club.id) + planShift).coerceIn(0f, 100f)
+        return (50f + 28f * analystQuality(w, club.id) + 14f * recruitmentQuality(w, club.id) + planShift + 5f * ClubEnvRules.facilityBonus(w, club.id, "DATA", 1f)).coerceIn(0f, 100f)
     }
 
     fun humanLevel(w: World): Float = dataLevel(w, w.human())

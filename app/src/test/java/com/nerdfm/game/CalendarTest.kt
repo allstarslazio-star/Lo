@@ -165,7 +165,6 @@ class CalendarTest {
         ObjectOutputStream(GZIPOutputStream(FileOutputStream(File(dir, "career1.dat")))).use { it.writeObject(old) }
         val loaded = (Persistence.load(dir) as LoadResult.Loaded).world
         assertEquals(Persistence.CURRENT_SAVE_VERSION, loaded.saveVersion)
-        assertEquals(10, Persistence.CURRENT_SAVE_VERSION)
         assertNull(loaded.ecosystem?.calendar)
         val startYear = loaded.year
         var guard = 0

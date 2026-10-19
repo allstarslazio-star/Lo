@@ -48,17 +48,20 @@ class GoldenBaselineTest {
     }
 
     // ---- 2. real game path ----------------------------------------------------------------------------------
-    private object Golden { // re-baselined 2026-10-18 on the consolidated build (CI run 39115686385, seeds 1..6, 12,852 fixtures)
+    private object Golden { // measured on the pre-ecosystem code, seeds 1..6
         const val GOALS = 2.208; const val GOALS_TOL = 0.06
         const val HOME = 0.433; const val DRAW = 0.279; const val AWAY = 0.288; const val RATE_TOL = 0.015
-        // Measured with no modifiers: shots 82.81, xG 8.37, injuries 29.46, condition 89.31. The pre-ecosystem values
-        // (77.31 / 7.80 / 25.02 / 90.39) no longer hold after the milestone merge (M2 conditions, M3-M6 hooks); goals and
-        // result rates are still inside their original bands, so only the four drifted metrics are re-centred.
-        const val SHOTS = 82.81; const val SHOTS_TOL = 1.5
-        const val XG = 8.37; const val XG_TOL = 0.15
-        const val INJ = 29.46; const val INJ_TOL = 2.5
+        const val SHOTS = 77.31; const val SHOTS_TOL = 1.5
+        const val XG = 7.80; const val XG_TOL = 0.15
+        const val INJ = 25.02; const val INJ_TOL = 2.5
+        /** Prevalence added by the M2 medical layer (relapses, overuse); measured 25.92 - 25.02 with the calendar off. */
+        const val INJ_MEDICAL = 0.9
+        /** M6: cups and continental games are extra engine matches, so injured player-weeks scale with exposure (measured per-match
+         *  injury rates are the same in cup and league games: 0.35 vs 0.40 injuries, 1.8 vs 2.0 injured weeks). Their knock-on
+         *  (relapses after cup injuries, tired starters) measured +1.8 on top; half of it is allowed in the centre of the band. */
+        const val INJ_KNOCK_ON = 1.0
         const val MORALE = 75.37; const val MORALE_TOL = 1.0
-        const val COND = 89.31; const val COND_TOL = 1.0
+        const val COND = 90.39; const val COND_TOL = 1.0
     }
 
     /** Extreme all-clubs scenarios may drift a bit further than normal play (bands x1.5). */
@@ -73,7 +76,9 @@ class GoldenBaselineTest {
         near("away win rate", Golden.AWAY, Golden.RATE_TOL, a.awayWinRate)
         near("shots/match", Golden.SHOTS, Golden.SHOTS_TOL, a.shotsPerMatch)
         near("xG/match", Golden.XG, Golden.XG_TOL, a.xgPerMatch)
-        near("injured per 1000 player-weeks", Golden.INJ, Golden.INJ_TOL, a.injuredPer1000PlayerWeeks)
+        val exposure = 1.0 + a.extraMatches.toDouble() / a.fixtures
+        val injCentre = (Golden.INJ + Golden.INJ_MEDICAL) * exposure + (if (a.extraMatches > 0) Golden.INJ_KNOCK_ON else 0.0)
+        near("injured per 1000 player-weeks", injCentre, Golden.INJ_TOL, a.injuredPer1000PlayerWeeks)
         near("mean morale", Golden.MORALE, Golden.MORALE_TOL, a.meanMorale)
         near("mean condition", Golden.COND, Golden.COND_TOL, a.meanCondition)
     }

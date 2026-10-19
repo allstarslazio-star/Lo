@@ -3,6 +3,8 @@ package com.nerdfm.game
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -26,22 +28,25 @@ fun MainMenu() {
     var hasBackup by remember { mutableStateOf(Persistence.backupExists(ctx.filesDir)) }
     var loadMessage by remember { mutableStateOf<String?>(null) }
     Row(Modifier.fillMaxSize().padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             T("NERD FM", 44, C.accent, true)
             T("A deep, brutal, fully offline football management sim", 15, C.muted, lines = 2)
             Spacer(Modifier.height(16.dp))
             T("7 divisions  |  126 clubs  |  5,000+ procedurally generated players", 13, C.text)
             T("Tick-based match engine  |  Hidden potential  |  Scouting fog  |  Board pressure", 13, C.text)
+            SupportCard()
         }
         Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Btn("New Career", modifier = Modifier.fillMaxWidth()) { App.mode = Mode.NEWGAME }
             Btn("Continue Career", enabled = hasSave, modifier = Modifier.fillMaxWidth()) {
                 scope.launch {
-                    val result = heavy("Loading career...") { Persistence.load(ctx.filesDir) }
+                    val recovery = heavy("Loading career...") { PerfMonitor.time(PerfMonitor.LOAD) { SaveRecovery.loadWithRecovery(ctx.filesDir) } }
+                    val result = recovery.result
                     when (result) {
                         is LoadResult.Loaded -> {
                             App.world = result.world
-                            App.screen = "Inbox"
+                            App.restoreNavigation()
+                            if (recovery.restoredFromBackup) App.saveWarning = recovery.message.orEmpty()
                             App.mode = Mode.GAME
                         }
                         LoadResult.NoSave -> {
@@ -75,7 +80,7 @@ fun MainMenu() {
                     when (result) {
                         is LoadResult.Loaded -> {
                             App.world = result.world
-                            App.screen = "Inbox"
+                            App.resetNavigation()
                             App.mode = Mode.GAME
                             hasSave = true
                             hasBackup = Persistence.backupExists(ctx.filesDir)
@@ -132,7 +137,9 @@ fun NewGameScreen() {
                         g
                     }
                     App.world = w
-                    App.screen = "Inbox"
+                    App.resetNavigation()
+                    App.tutorial.restart()
+                    App.tutorialTick++
                     App.mode = Mode.GAME
                     withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
                 }
@@ -216,3 +223,5 @@ fun expectation(rank: Int, n: Int): String = when {
     rank <= 15 -> "stay clear of the bottom 3"
     else -> "avoid relegation - survival is success"
 }
+
+

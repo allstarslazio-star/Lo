@@ -105,6 +105,8 @@ object Diagnostics {
             integrity = try { WorldIntegrity.audit(world).summary(6) } catch (e: Throwable) { "audit failed: ${e.javaClass.simpleName}" }
             fingerprint = try { StateFingerprint.of(world) } catch (_: Throwable) { null }
         }
+        // Compose and coroutines wrap the real failure: report the innermost cause, which is where the bug is.
+        val root: Throwable? = error?.let { e -> generateSequence(e) { it.cause }.take(12).last() }
         val season = try { world?.seasonLabel() ?: "-" } catch (_: Throwable) { "-" }
         return FailureReport(
             operation = operation,
@@ -113,9 +115,9 @@ object Diagnostics {
             seed = world?.seed,
             season = season,
             week = world?.week,
-            errorType = error?.javaClass?.name,
-            errorMessage = error?.message?.let { scrub(it) },
-            stackTop = error?.stackTrace?.take(8)?.map { "${it.className}.${it.methodName}:${it.lineNumber}" } ?: emptyList(),
+            errorType = root?.javaClass?.name,
+            errorMessage = root?.message?.let { scrub(it) },
+            stackTop = root?.stackTrace?.take(12)?.map { "${it.className}.${it.methodName}:${it.lineNumber}" } ?: emptyList(),
             integritySummary = integrity,
             fingerprint = fingerprint,
             recentOperations = recentOperations(),

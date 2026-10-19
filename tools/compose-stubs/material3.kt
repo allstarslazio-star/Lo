@@ -17,7 +17,7 @@ fun darkColorScheme(primary: Color = Color.Black, onPrimary: Color = Color.Black
 @Composable fun Text(text: String, modifier: Modifier = Modifier, color: Color = Color.Black, fontSize: TextUnit = TextUnit(14f), fontWeight: FontWeight? = null,
     textAlign: TextAlign? = null, overflow: TextOverflow = TextOverflow.Clip, maxLines: Int = Int.MAX_VALUE) {}
 @Composable fun Button(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, shape: Shape? = null, contentPadding: PaddingValues = PaddingValues(), content: @Composable RowScope.() -> Unit) {}
-@Composable fun Surface(modifier: Modifier = Modifier, color: Color = Color.Black, content: @Composable () -> Unit) {}
+@Composable fun Surface(modifier: Modifier = Modifier, shape: Shape? = null, color: Color = Color.Black, content: @Composable () -> Unit) {}
 @Composable fun HorizontalDivider(modifier: Modifier = Modifier, color: Color = Color.Black) {}
 @Composable fun Switch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) {}
 @Composable fun Checkbox(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) {}
@@ -28,3 +28,4 @@ fun darkColorScheme(primary: Color = Color.Black, onPrimary: Color = Color.Black
 @Composable fun AlertDialog(onDismissRequest: () -> Unit, confirmButton: @Composable () -> Unit, modifier: Modifier = Modifier, dismissButton: (@Composable () -> Unit)? = null,
     title: (@Composable () -> Unit)? = null, text: (@Composable () -> Unit)? = null) {}
 @Composable fun TextButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) {}
+@Composable fun CircularProgressIndicator(modifier: Modifier = Modifier) {}

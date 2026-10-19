@@ -106,17 +106,27 @@ object PlayerQuery {
         return QueryResult(ordered, source.size, filter, emptyMessageFor(source.size, ordered.size, filter))
     }
 
-    private fun comparatorFor(sort: PlayerSort, overallOf: (Player) -> Int, potentialOf: (Player) -> Int): Comparator<Player> {
+    /** Sorting calls a key function O(n log n) times; with thousands of players the expensive ones are worked out once each. */
+    private fun <T> memo(f: (Player) -> T): (Player) -> T {
+        val cache = HashMap<Int, T>()
+        return { p -> cache.getOrPut(p.id) { f(p) } }
+    }
+
+    private fun comparatorFor(sort: PlayerSort, rawOverall: (Player) -> Int, rawPotential: (Player) -> Int): Comparator<Player> {
+        val overallOf = memo(rawOverall)
+        val potentialOf = memo(rawPotential)
+        val valueOf = memo { it.value() }
+        val nameOf = memo { normalize(it.name) }
         val base: Comparator<Player> = when (sort.key) {
             SortKey.POSITION -> compareBy<Player> { it.pos.ordinal }.thenByDescending { overallOf(it) }
             SortKey.OVERALL -> compareBy<Player> { overallOf(it) }
             SortKey.POTENTIAL -> compareBy<Player> { potentialOf(it) }
             SortKey.AGE -> compareBy<Player> { it.age }
-            SortKey.VALUE -> compareBy<Player> { it.value() }
+            SortKey.VALUE -> compareBy<Player> { valueOf(it) }
             SortKey.WAGE -> compareBy<Player> { it.wage }
             SortKey.FITNESS -> compareBy<Player> { it.condition }
             SortKey.MORALE -> compareBy<Player> { it.morale }
-            SortKey.NAME -> compareBy<Player> { normalize(it.name) }
+            SortKey.NAME -> compareBy<Player> { nameOf(it) }
         }
         // POSITION already embeds its own secondary order; flipping applies to the whole comparator.
         return if (sort.descending) base.reversed() else base

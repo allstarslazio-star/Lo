@@ -63,6 +63,7 @@ fun DiagnosticsScreen(w: World) {
             T(if (App.diagnosticsText.isEmpty()) "No audit has been run this session." else App.diagnosticsText, 11, C.text, lines = 18)
             Spacer(Modifier.height(8.dp))
             T("Reports stay on this device. Names and file paths are removed from copied text.", 11, C.muted, lines = 3)
+            SupportCard()
             Spacer(Modifier.height(8.dp))
             Btn("Show tutorial again", modifier = Modifier.minTouch()) { App.tutorial.restart(); App.tutorialTick++ }
         }

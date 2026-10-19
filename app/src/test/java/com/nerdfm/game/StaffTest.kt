@@ -20,7 +20,8 @@ class StaffTest {
             assertTrue("no vacancies at the start", Staffing.vacancies(w, c.id).isEmpty())
         }
         for (role in StaffRole.values()) assertTrue(Staffing.freeAgents(w, role).size >= Staffing.POOL_MIN_PER_ROLE)
-        assertEquals(StaffRole.values().filter { it != StaffRole.LANGUAGE_COACH }.sumOf { it.slots }, Staffing.SLOT_ORDER.size) // the M4 language coach is never part of AI staffing
+        assertEquals("normal staffing covers every role except the optional language coach", StaffRole.values().filter { it != StaffRole.LANGUAGE_COACH }.sumOf { it.slots }, Staffing.SLOT_ORDER.size)
+        assertFalse(StaffRole.LANGUAGE_COACH in Staffing.SLOT_ORDER)
     }
 
     @Test fun generationIsDeterministic() {

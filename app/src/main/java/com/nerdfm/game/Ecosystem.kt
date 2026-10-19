@@ -47,14 +47,16 @@ class EcosystemState : Serializable {
     var identity: IdentityState? = null
     /** M2: player workloads, injury history, rehab policy. */
     var medical: MedicalState? = null
+    /** M3: data plan. */
+    var analytics: AnalyticsState? = null
     /** M4: languages, culture, relationships, personal events. */
     var people: PeopleState? = null
     /** M5: fans, stadium, pitch, facilities, media. */
     var env: EnvState? = null
     /** M6: cups, continental competition, international windows, travel. */
     var calendar: CalendarState? = null
-    /** M3: data plan and analytics settings. */
-    var analytics: AnalyticsState? = null
+    /** M7: tactical familiarity, set pieces, weekly preparation focus. */
+    var prep: PrepState? = null
 }
 
 /**
@@ -67,7 +69,7 @@ object Ecosystem {
     @Volatile var enabled = true
 
     /** Registration point. Milestones M1..M7 add their providers here; tests swap the list via [withProviders]. */
-    @Volatile internal var providers: List<FactorProvider> = listOf(StaffFactors, BoardFactors, CultureFactors, PeopleFactors, EnvFactors, CalendarFactors, RefereeFactors, AnalyticsFactors)
+    @Volatile internal var providers: List<FactorProvider> = listOf(StaffFactors, BoardFactors, CultureFactors, AnalyticsFactors, PeopleFactors, EnvFactors, CalendarFactors, RefereeFactors, PrepFactors)
 
     /** Per-player providers (M2 onwards). */
     @Volatile internal var playerProviders: List<PlayerFactorProvider> = listOf(MedicalLoadFactors)
@@ -118,6 +120,7 @@ object Ecosystem {
         MedicalRules.weekly(w)
         People.weekly(w)
         ClubEnvRules.weekly(w)
+        Preparation.weekly(w)
     }
 
     /** End of Game.completeWeek, after any season rollover and sacking. */
@@ -125,9 +128,9 @@ object Ecosystem {
         if (!enabled) return
         BoardRules.afterWeek(w)
         MedicalRules.prune(w)
+        Analytics.prune(w)
         People.prune(w)
         ClubEnvRules.prune(w)
-        Analytics.prune(w)
     }
 
     /** Start of the season rollover, tables still intact. */
@@ -138,6 +141,7 @@ object Ecosystem {
         Identity.seasonReview(w)
         MedicalRules.seasonReview(w)
         ClubEnvRules.seasonReview(w)
+        Preparation.seasonReview(w)
         FixtureCalendar.seasonReview(w)
         NameForge.fixDuplicates(w)
     }

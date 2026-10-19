@@ -42,6 +42,8 @@ class CalendarState : Serializable {
 
     // what happened this week (cleared every new week)
     val midweek = HashSet<Int>()
+    /** Minutes each player played in this week's cup/continental match (player id -> minutes). Not saved: it only feeds this week's workload. */
+    @Transient var midMins: HashMap<Int, Int>? = null
     val longTrip = HashSet<Int>()
     /** Players on international duty this week. */
     val away = HashSet<Int>()
@@ -66,6 +68,8 @@ object FixtureCalendar {
     val INTL_WEEKS = intArrayOf(8, 17, 26, 32)
     const val LONG_TRIP_KM = 350f
     const val CONT_SIZE = 8
+    /** Share of one week's base condition recovery that a player regains between a midweek match and the weekend. */
+    const val MIDWEEK_RECOVERY_SHARE = 0.5f
     private val GROUP_MD = arrayOf(intArrayOf(0, 1, 2, 3), intArrayOf(0, 2, 1, 3), intArrayOf(0, 3, 1, 2),
         intArrayOf(1, 0, 3, 2), intArrayOf(2, 0, 3, 1), intArrayOf(3, 0, 2, 1))
 
@@ -93,6 +97,9 @@ object FixtureCalendar {
     // ---------------------------------------------------------------- the weekly hook
 
     /** Called from Game.startWeek before the league matches. Idempotent per week. */
+    /** Minutes [playerId] played in this week's midweek match; lets the medical load model see cup and continental games. */
+    fun midweekMinutes(w: World, playerId: Int): Int = if (!Ecosystem.enabled) 0 else (w.eco().calendar?.midMins?.get(playerId) ?: 0)
+
     fun midweek(w: World) {
         if (!hookEnabled || !Ecosystem.enabled) return
         if (w.week !in 1..34) return
@@ -101,7 +108,7 @@ object FixtureCalendar {
         val key = w.year * 40 + w.week
         if (s.doneKey == key) return
         s.doneKey = key
-        s.midweek.clear(); s.longTrip.clear(); s.away.clear()
+        s.midweek.clear(); s.longTrip.clear(); s.away.clear(); s.midMins?.clear()
         if (s.cupYear != w.year || s.contYear != w.year) setupSeason(w, s)
         if (w.week in INTL_WEEKS) internationalWindow(w, s)
         val cr = CUP_WEEKS.indexOf(w.week)
@@ -175,6 +182,15 @@ object FixtureCalendar {
         eng.simToEnd()
         eng.applyToPlayers(rnd)
         Ecosystem.endMatch(w)
+        // A midweek match is followed by a few days of recovery before the weekend league game. Weekly recovery only runs
+        // once, at the end of the week, so half of it is given here; without it every double week would start tired.
+        for (ps in ht.xi + ht.bench + at.xi + at.bench) {
+            if (ps.mins <= 0) continue
+            val p = ps.p
+            val mm = state(w).let { st -> st.midMins ?: HashMap<Int, Int>().also { st.midMins = it } }
+            mm[p.id] = (mm[p.id] ?: 0) + ps.mins
+            p.condition = min(100f, p.condition + MIDWEEK_RECOVERY_SHARE * (28f + p.attrs.at(Attr.Fitness) * 1.1f))
+        }
         return ht.goals to at.goals
     }
 

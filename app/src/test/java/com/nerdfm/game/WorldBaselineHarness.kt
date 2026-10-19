@@ -9,6 +9,8 @@ object WorldBaselineHarness {
     class SeasonResult(
         val seed: Long,
         val fixtures: Int,
+        /** Engine matches played outside the league (cups, continental competition); their shots and xG are in the player totals. */
+        val extraMatches: Int,
         val goals: Int,
         val homeWins: Int,
         val draws: Int,
@@ -28,15 +30,16 @@ object WorldBaselineHarness {
         val homeWinRate: Double = seasons.sumOf { it.homeWins }.toDouble() / fixtures
         val drawRate: Double = seasons.sumOf { it.draws }.toDouble() / fixtures
         val awayWinRate: Double = seasons.sumOf { it.awayWins }.toDouble() / fixtures
-        val shotsPerMatch: Double = seasons.sumOf { it.shots }.toDouble() / fixtures
-        val xgPerMatch: Double = seasons.sumOf { it.xg } / fixtures
+        val extraMatches: Int = seasons.sumOf { it.extraMatches }
+        val shotsPerMatch: Double = seasons.sumOf { it.shots }.toDouble() / (fixtures + extraMatches)
+        val xgPerMatch: Double = seasons.sumOf { it.xg } / (fixtures + extraMatches)
         val injuredPer1000PlayerWeeks: Double =
             seasons.sumOf { it.injuredPlayerWeeks }.toDouble() * 1000.0 / seasons.sumOf { it.playerWeeks }
         val meanMorale: Double = seasons.sumOf { it.moraleSum } / seasons.sumOf { it.playerWeeks }
         val meanCondition: Double = seasons.sumOf { it.conditionSum } / seasons.sumOf { it.playerWeeks }
         val digest: Long = seasons.fold(FNV_BASIS) { acc, s -> (acc xor s.digest) * FNV_PRIME }
 
-        fun text(): String = "fixtures=$fixtures goals=%.3f home=%.3f draw=%.3f away=%.3f shots=%.2f xg=%.2f inj/1000pw=%.2f morale=%.2f cond=%.2f"
+        fun text(): String = "fixtures=$fixtures extra=$extraMatches goals=%.3f home=%.3f draw=%.3f away=%.3f shots=%.2f xg=%.2f inj/1000pw=%.2f morale=%.2f cond=%.2f"
             .format(goalsPerMatch, homeWinRate, drawRate, awayWinRate, shotsPerMatch, xgPerMatch, injuredPer1000PlayerWeeks, meanMorale, meanCondition)
     }
 
@@ -54,6 +57,7 @@ object WorldBaselineHarness {
         var conditionSum = 0.0
         var fixtures = 0; var goals = 0; var hw = 0; var dr = 0; var aw = 0
         var shots = 0L; var xg = 0.0
+        var extra = 0
         for (wk in 1..34) {
             w.week = wk
             val fx = Game.startWeek(w)
@@ -77,11 +81,12 @@ object WorldBaselineHarness {
                     mix((f.hg * 31 + f.ag).toLong())
                 }
                 for (p in w.players.values) { shots += p.seasonShots; xg += p.seasonXg }
+                w.ecosystem?.calendar?.let { cal -> extra = cal.cupTies.count { it.played } + cal.contTies.count { it.played } }
             }
             Game.completeWeek(w)
             w.sacked = false
         }
-        return SeasonResult(seed, fixtures, goals, hw, dr, aw, shots, xg, injured, playerWeeks, moraleSum, conditionSum, digest)
+        return SeasonResult(seed, fixtures, extra, goals, hw, dr, aw, shots, xg, injured, playerWeeks, moraleSum, conditionSum, digest)
     }
 
     fun run(seeds: LongRange): Aggregate = Aggregate(seeds.map { playSeason(it) })

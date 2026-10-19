@@ -1,5 +1,6 @@
 package com.nerdfm.game
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,7 +24,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
-val NAV = listOf("Home", "Inbox", "Squad", "Players", "People", "Tactics", "Training", "Staff", "League", "Transfers", "Finance", "Business", "Ecosystem", "Club", "Diagnostics")
+/** Kept for older call sites; the single source of truth is [Destination]. */
+val NAV: List<String> = Destination.ALL.map { it.screen }
 
 @Composable
 fun GameShell(w: World, tick: Int) {
@@ -32,33 +34,44 @@ fun GameShell(w: World, tick: Int) {
     var confirm by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var advancing by remember { mutableStateOf(false) }
+    var quitConfirm by remember { mutableStateOf(false) }
     val me = w.human()
     val fx = w.humanFixture()
     val unread = w.news.count { !it.read }
 
     fun runAdvance() {
-        if (advancing || App.busy.isNotEmpty()) return
+        // The guard ignores repeat taps and a second request while one is in flight (no duplicate week advances).
+        if (advancing || App.busy.isNotEmpty() || !App.advanceGuard.tryStart()) return
         advancing = true
         scope.launch {
             try {
-            if (fx != null) {
-                val f = heavy("Simulating the rest of the round...") { Game.startWeek(w) }
-                if (f != null) {
-                    App.pendingFixture = f
-                    App.engine = Game.humanEngine(w, f)
-                    App.mode = Mode.MATCH
-                } else App.bump()
-            } else {
-                heavy(if (w.week == 34) "Season rollover..." else "Advancing a week...") {
-                    Game.startWeek(w)
-                    Game.completeWeek(w)
+                if (fx != null) {
+                    val f = heavy("Simulating the rest of the round...") {
+                        PerfMonitor.time(PerfMonitor.MATCH) { SaveCoordinator.withWorld { Game.startWeek(w) } }
+                    }
+                    if (f != null) {
+                        App.pendingFixture = f
+                        App.engine = Game.humanEngine(w, f)
+                        App.mode = Mode.MATCH
+                    } else App.bump()
+                } else {
+                    heavy(if (w.week == 34) "Season rollover..." else "Advancing a week...") {
+                        PerfMonitor.time(if (w.week == 34) PerfMonitor.SEASON else PerfMonitor.WEEK) {
+                            SaveCoordinator.withWorld { Game.startWeek(w); Game.completeWeek(w) }
+                        }
+                    }
+                    val saved = withContext(Dispatchers.IO) { SaveCoordinator.save(ctx.filesDir, w) }
+                    if (!saved.ok) App.saveWarning = "The week was played, but the career could not be saved. Your previous save is intact. Free some storage and try Save & quit from the menu."
+                    App.bump()
                 }
-                withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
-                App.bump()
+            } finally {
+                advancing = false
+                App.advanceGuard.finish()
             }
-            } finally { advancing = false }
         }
     }
+
+    BackHandler(enabled = true) { if (!App.goBack()) quitConfirm = true }
 
     Column(Modifier.fillMaxSize()) {
         // top bar
@@ -86,26 +99,26 @@ fun GameShell(w: World, tick: Int) {
             } else if (w.week == 0) "Begin season" else "Advance"
             Btn(if (advancing) "Advancing…" else label, enabled = !advancing && App.busy.isEmpty()) { if (fx != null) confirm = true else runAdvance() }
         }
-        TutorialBanner()
         Row(Modifier.weight(1f)) {
-            Column(Modifier.width(104.dp).fillMaxHeight().background(C.surface).verticalScroll(rememberScrollState()).padding(top = 4.dp)) {
-                for (n in NAV) {
-                    val sel = App.screen == n
-                    Box(
-                        Modifier.fillMaxWidth().background(if (sel) C.accent.copy(alpha = 0.22f) else Color.Transparent)
-                            .clickable { App.screen = n }.padding(horizontal = 10.dp, vertical = 11.dp)
-                    ) {
-                        val extra = if (n == "Inbox" && unread > 0) " ($unread)" else if (n == "Transfers" && w.offers.isNotEmpty()) " (${w.offers.size})" else ""
-                        T(n + extra, 13, if (sel) C.accent else C.text, sel)
-                    }
+            Column(Modifier.width(116.dp).fillMaxHeight().background(C.surface).verticalScroll(rememberScrollState()).padding(top = 4.dp)) {
+                val urgent = App.notices.urgentCount(w)
+                fun badge(d: Destination): String = when (d) {
+                    Destination.HOME -> if (urgent > 0) " ($urgent)" else ""
+                    Destination.INBOX -> if (unread > 0) " ($unread)" else ""
+                    Destination.TRANSFERS -> if (w.offers.isNotEmpty()) " (${w.offers.size})" else ""
+                    else -> ""
                 }
+                for (d in Destination.PRIMARY) NavItem(d, badge(d), App.screen == d.screen)
+                HorizontalDivider(color = C.line, modifier = Modifier.padding(vertical = 4.dp))
+                T("More", 10, C.muted, modifier = Modifier.padding(start = 10.dp))
+                for (d in Destination.SECONDARY) NavItem(d, badge(d), App.screen == d.screen)
             }
             Box(Modifier.weight(1f).fillMaxHeight().padding(8.dp)) {
                 when (App.screen) {
                     "Home" -> HomeScreen(w)
                     "Inbox" -> InboxScreen(w)
-                    "Players" -> PlayersScreen(w)
                     "Squad" -> SquadScreen(w)
+                    "Players" -> PlayersScreen(w)
                     "People" -> PeopleScreen(w)
                     "Tactics" -> TacticsScreen(w)
                     "Training" -> TrainingScreen(w)
@@ -117,9 +130,11 @@ fun GameShell(w: World, tick: Int) {
                     "Ecosystem" -> EcosystemScreen(w)
                     "Club" -> ClubScreen(w)
                     "Diagnostics" -> DiagnosticsScreen(w)
+                    else -> HomeScreen(w)
                 }
             }
         }
+        TutorialBanner()
     }
 
     if (confirm && fx != null) {
@@ -160,14 +175,59 @@ fun GameShell(w: World, tick: Int) {
                 Btn("Save & quit to menu") {
                     menu = false
                     scope.launch {
-                        withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
-                        App.mode = Mode.MENU
+                        val saved = withContext(Dispatchers.IO) { SaveCoordinator.save(ctx.filesDir, w) }
+                        if (saved.ok) App.mode = Mode.MENU
+                        else App.saveWarning = "The career could not be saved, so it stays open. Your previous save is intact."
                     }
                 }
             },
             dismissButton = { TextButton(onClick = { menu = false }) { Text("Close") } }
         )
     }
+    App.pendingLeave?.let { blocked ->
+        AlertDialog(
+            onDismissRequest = { App.cancelLeave() },
+            title = { Text("Leave without saving?") },
+            text = { Text(blocked.reason) },
+            confirmButton = { Btn("Discard and leave") { App.confirmLeave() } },
+            dismissButton = { TextButton(onClick = { App.cancelLeave() }) { Text("Stay here") } }
+        )
+    }
+    if (quitConfirm) {
+        AlertDialog(
+            onDismissRequest = { quitConfirm = false },
+            title = { Text("Return to the main menu?") },
+            text = { Text("Progress is saved after every week. Save now and go back to the menu?") },
+            confirmButton = {
+                Btn("Save and exit") {
+                    quitConfirm = false
+                    scope.launch {
+                        val saved = withContext(Dispatchers.IO) { SaveCoordinator.save(ctx.filesDir, w) }
+                        if (saved.ok) App.mode = Mode.MENU
+                        else App.saveWarning = "The career could not be saved, so it stays open. Your previous save is intact."
+                    }
+                }
+            },
+            dismissButton = { TextButton(onClick = { quitConfirm = false }) { Text("Keep playing") } }
+        )
+    }
+    if (App.saveWarning.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { App.saveWarning = "" },
+            title = { Text("Save problem") },
+            text = { Text(App.saveWarning) },
+            confirmButton = { TextButton(onClick = { App.saveWarning = "" }) { Text("OK") } }
+        )
+    }
+}
+
+@Composable
+private fun NavItem(d: Destination, badge: String, selected: Boolean) {
+    Box(
+        Modifier.fillMaxWidth().background(if (selected) C.accent.copy(alpha = 0.22f) else Color.Transparent)
+            .tappable("Open ${d.label}") { App.navigate(d.screen) }.padding(horizontal = 10.dp),
+        contentAlignment = Alignment.CenterStart
+    ) { T(d.label + badge, 13, if (selected) C.accent else C.text, selected) }
 }
 
 // ---------------------------------------------------------------- inbox
@@ -306,6 +366,11 @@ fun FinanceScreen(w: World) {
     var wageCapText by remember(me.id) { mutableStateOf(me.wageBudget.toString()) }
     val bill = w.wageBill(me)
     tick.let { }
+    // M7: a half-typed wage cap counts as an unsaved change, so navigating away asks before discarding it.
+    LaunchedEffect(wageCapText) {
+        if (wageCapText != me.wageBudget.toString()) App.nav.markDirty("Finance", "The new weekly wage cap has not been set yet.")
+        else App.nav.markClean("Finance")
+    }
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Panel(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
             T("Finances", 15, C.accent, true)
@@ -329,6 +394,7 @@ fun FinanceScreen(w: World) {
                 Btn("Set cap", enabled = wageCapText.toLongOrNull() != null && wageCapText.toLongOrNull()!! >= 1_000L) {
                     val cap = wageCapText.toLongOrNull()!!.coerceAtMost(1_000_000_000L)
                     me.wageBudget = cap
+                    App.nav.markClean("Finance")
                     msg = "Weekly wage cap set to ${money(cap)}. The board may still react to overspending."
                     tick++; App.bump()
                 }
@@ -449,8 +515,8 @@ fun SackedScreen(w: World) {
                                     w.addNews("New job", "You are the new manager of ${c.name}.")
                                     Lineups.autoPick(w, c)
                                 }
-                                withContext(Dispatchers.IO) { Persistence.save(ctx.filesDir, w) }
-                                App.screen = "Inbox"
+                                withContext(Dispatchers.IO) { SaveCoordinator.save(ctx.filesDir, w) }
+                                App.resetNavigation()
                                 App.bump()
                             }
                         }.padding(10.dp)

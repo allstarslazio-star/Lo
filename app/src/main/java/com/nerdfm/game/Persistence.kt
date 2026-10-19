@@ -1,5 +1,6 @@
 package com.nerdfm.game
 
+import java.io.ByteArrayOutputStream
 import java.io.EOFException
 import java.io.File
 import java.io.FileInputStream
@@ -24,11 +25,11 @@ sealed class LoadResult {
 
 /** File-based by design so persistence can be exercised by local JVM unit tests. */
 object Persistence {
-    const val CURRENT_SAVE_VERSION: Int = 10
+    const val CURRENT_SAVE_VERSION: Int = 11
     internal const val SAVE_NAME = "career1.dat"
-    private const val TEMP_NAME = "career1.tmp"
+    internal const val TEMP_NAME = "career1.tmp"
     internal const val BACKUP_NAME = "career1.bak"
-    private const val FAILED_BACKUP_NAME = "career1.failed-load.bak"
+    internal const val FAILED_BACKUP_NAME = "career1.failed-load.bak"
 
     /** Duration of the most recent temporary-save read-back verification. */
     @Volatile
@@ -84,28 +85,37 @@ object Persistence {
      */
     @Synchronized
     fun save(directory: File, world: World): Boolean {
-        val bytes = try { snapshot(world) } catch (_: Exception) { return false }
-        return saveSnapshot(directory, bytes)
+        world.saveVersion = CURRENT_SAVE_VERSION
+        return writeVerified(directory) { temp ->
+            ObjectOutputStream(GZIPOutputStream(FileOutputStream(temp))).use { it.writeObject(world) }
+        }
     }
 
-    /** Serialises [world] to the compressed on-disk format. Callers that share the world must hold its lock while this runs. */
+    /**
+     * Serialises [world] into exactly the bytes [save] would write. Callers that need a consistent snapshot take the
+     * world lock (see SaveCoordinator), call this, release the lock and only then touch the disk, so the world cannot
+     * change underneath the write and the lock is never held during file I/O.
+     */
     fun snapshot(world: World): ByteArray {
         world.saveVersion = CURRENT_SAVE_VERSION
-        val out = java.io.ByteArrayOutputStream()
-        ObjectOutputStream(GZIPOutputStream(out)).use { it.writeObject(world) }
-        return out.toByteArray()
+        val buffer = ByteArrayOutputStream(1 shl 20)
+        ObjectOutputStream(GZIPOutputStream(buffer)).use { it.writeObject(world) }
+        return buffer.toByteArray()
     }
 
-    /** Writes already-serialised bytes with the verified-temp protocol (see [save]). Returns false if anything fails. */
+    /** Same write/verify/archive/rename protocol as [save], fed from a snapshot taken earlier by [snapshot]. */
     @Synchronized
-    fun saveSnapshot(directory: File, bytes: ByteArray): Boolean {
+    fun saveSnapshot(directory: File, snapshot: ByteArray): Boolean =
+        writeVerified(directory) { temp -> FileOutputStream(temp).use { it.write(snapshot) } }
+
+    private fun writeVerified(directory: File, writeTemp: (File) -> Unit): Boolean {
         val saveStart = System.nanoTime()
         val temp = File(directory, TEMP_NAME)
         return try {
             if (!directory.exists() && !directory.mkdirs()) return false
             if (temp.exists() && !temp.delete()) return false
 
-            FileOutputStream(temp).use { it.write(bytes) }
+            writeTemp(temp)
 
             val verificationStart = System.nanoTime()
             val verification = try {
@@ -159,6 +169,7 @@ object Persistence {
         return file.renameTo(destination)
     }
 
+    /** Reads and migrates one save file in memory. Never moves, renames or deletes anything. */
     internal fun readFile(file: File): LoadResult {
         return try {
             val world = ObjectInputStream(GZIPInputStream(FileInputStream(file))).use { input ->
@@ -175,8 +186,6 @@ object Persistence {
             SaveMigrations.migrate(world)
             normalizeAfterLoad(world)
             LoadResult.Loaded(world)
-        } catch (e: MigrationFailedException) {
-            LoadResult.Unreadable("The save could not be upgraded safely: ${e.message ?: "migration failed"}. The file was left untouched.")
         } catch (e: InvalidClassException) {
             LoadResult.Incompatible("A saved class is incompatible with this build: ${e.message ?: e.javaClass.simpleName}.")
         } catch (e: ClassNotFoundException) {
@@ -185,6 +194,9 @@ object Persistence {
             LoadResult.Corrupt("The save ended unexpectedly (EOF).")
         } catch (e: ZipException) {
             LoadResult.Corrupt("The save's compressed data is invalid: ${e.message ?: "invalid GZIP data"}.")
+        } catch (e: MigrationFailedException) {
+            // The upgrade runs on an in-memory copy, so the file on disk is still the untouched original.
+            LoadResult.Unreadable("Save format ${e.fromVersion} could not be upgraded: ${e.message ?: "unknown reason"}. The file was left untouched.")
         } catch (e: StreamCorruptedException) {
             LoadResult.Corrupt("The save's object stream is corrupted: ${e.message ?: "invalid object stream"}.")
         } catch (e: Exception) {
@@ -205,10 +217,11 @@ object Persistence {
         // A save written mid-match may carry applied ecosystem deltas; take them off before play resumes.
         Ecosystem.endMatch(world)
         MedicalRules.repair(world)
+        Analytics.repair(world)
         People.repair(world)
         ClubEnvRules.repair(world)
         FixtureCalendar.repair(world)
-        Analytics.repair(world)
+        Preparation.repair(world)
     }
 
     private fun archiveBeforeOverwrite(directory: File, current: File): Boolean {

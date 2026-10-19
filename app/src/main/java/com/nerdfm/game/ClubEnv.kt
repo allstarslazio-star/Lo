@@ -154,6 +154,13 @@ object ClubEnvRules {
         "TRAINING" -> s.training; "MEDICAL" -> s.medical; "ACADEMY" -> s.academy; "DATA" -> s.data; else -> 0
     }
 
+    /** Facility level (0..3) of the human club scaled by [perLevel]; AI clubs have no facility model and get 0. */
+    fun facilityBonus(w: World, clubId: Int, kind: String, perLevel: Float): Float {
+        if (!Ecosystem.enabled || clubId != w.humanClubId) return 0f
+        val s = w.eco().env ?: return 0f
+        return level(s, kind) * perLevel
+    }
+
     fun kindLabel(kind: String): String = when (kind) {
         "TRAINING" -> "Training ground"; "MEDICAL" -> "Medical centre"; "ACADEMY" -> "Academy"; "DATA" -> "Data suite"
         "PITCH" -> "Pitch relaying"; "STADIUM" -> "Stadium repairs"; else -> kind

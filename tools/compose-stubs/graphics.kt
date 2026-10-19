@@ -6,3 +6,4 @@ class Color(val v: Long) {
 }
 interface Shape
 val RectangleShape: Shape = TODO()
+class Path { fun moveTo(x: Float, y: Float) {}; fun lineTo(x: Float, y: Float) {}; fun quadraticBezierTo(a: Float, b: Float, c: Float, d: Float) {}; fun cubicTo(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float) {}; fun close() {} }

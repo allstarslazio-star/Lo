@@ -18,17 +18,17 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
 
 object C {
-    val bg = Color(0xFF080A08)
-    val surface = Color(0xFF111411)
-    val card = Color(0xFF1A1E1A)
-    val line = Color(0xFF2A302A)
-    val accent = Color(0xFF22C55E)
-    val green = Color(0xFF4ADE80)
-    val red = Color(0xFFF85149)
-    val amber = Color(0xFFD29922)
-    val star = Color(0xFFFFC107)
-    val text = Color(0xFFE8EEE8)
-    val muted = Color(0xFF8E998E)
+    val bg = Color(Palette.BG)
+    val surface = Color(Palette.SURFACE)
+    val card = Color(Palette.CARD)
+    val line = Color(Palette.LINE)
+    val accent = Color(Palette.ACCENT)
+    val green = Color(Palette.GREEN)
+    val red = Color(Palette.RED)
+    val amber = Color(Palette.AMBER)
+    val star = Color(Palette.STAR)
+    val text = Color(Palette.TEXT)
+    val muted = Color(Palette.MUTED)
 }
 
 @Composable
@@ -61,7 +61,7 @@ fun T(
 @Composable
 fun Btn(text: String, enabled: Boolean = true, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Button(
-        onClick = onClick, enabled = enabled, modifier = modifier,
+        onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = Accessibility.MIN_TOUCH_DP.dp),
         shape = RoundedCornerShape(2.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
     ) { Text(text, fontSize = 13.sp, maxLines = 1) }
@@ -82,7 +82,9 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
             Box(
                 modifier = Modifier
                     .background(if (i == selected) C.accent else Color.Transparent)
-                    .clickable { onSelect(i) }
+                    .heightIn(min = Accessibility.MIN_TOUCH_DP.dp)
+                    .describe(o + if (i == selected) ", selected" else "")
+                    .clickable(onClickLabel = "Select $o") { onSelect(i) }
                     .padding(horizontal = 9.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center
             ) { T(o, 12, if (i == selected) Color.Black else C.text, i == selected) }

@@ -101,6 +101,9 @@ object PerfMonitor {
         if (value > s.max) s.max = value
     }
 
+    /** Called when a measured operation exceeds its release budget (the app writes an incident for it). Never throws into the caller. */
+    @Volatile var onOverBudget: ((operation: String, millis: Long, budgetMs: Long) -> Unit)? = null
+
     /** Times [block], records the sample even when it throws, and notes a main-thread call in [ThreadGuard]. */
     fun <T> time(operation: String, block: () -> T): T {
         ThreadGuard.check(operation)
@@ -108,7 +111,10 @@ object PerfMonitor {
         try {
             return block()
         } finally {
-            record(operation, (System.nanoTime() - start) / 1_000_000L)
+            val ms = (System.nanoTime() - start) / 1_000_000L
+            record(operation, ms)
+            val budget = PerfBudget.budgetFor(operation)
+            if (budget != null && ms > budget) { try { onOverBudget?.invoke(operation, ms, budget) } catch (_: Throwable) { } }
         }
     }
 

@@ -10,3 +10,5 @@ fun Modifier.clickable(enabled: Boolean = true, onClick: () -> Unit): Modifier =
 fun Modifier.verticalScroll(state: ScrollState, enabled: Boolean = true): Modifier = this
 fun Modifier.horizontalScroll(state: ScrollState, enabled: Boolean = true): Modifier = this
 fun Modifier.border(width: androidx.compose.ui.unit.Dp, color: Color, shape: Shape = TODO()): Modifier = this
+@Composable fun Canvas(modifier: Modifier, onDraw: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit) {}
+fun Modifier.clickable(enabled: Boolean = true, onClickLabel: String? = null, role: androidx.compose.ui.semantics.Role? = null, onClick: () -> Unit): Modifier = this

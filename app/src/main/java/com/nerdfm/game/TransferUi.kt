@@ -58,13 +58,15 @@ fun TransferScreen(w: World) {
         Spacer(Modifier.height(6.dp))
         if (tab <= 1) {
             val results = remember(tab, lgIdx, posIdx, minOvr, maxAge, tick, w.week, w.year) {
+                // cheap tests first; the (expensive) displayed overall is worked out once per remaining player, not once per comparison
+                val ovr = shownOvrFn(w)
                 w.players.values.filter { p ->
                     val fa = p.clubId < 0
                     (if (tab == 1) fa else (!fa && p.clubId != me.id)) &&
                         (tab == 1 || lgIdx == 0 || w.clubs[p.clubId].tier == lgIdx - 1) &&
                         (posIdx == 0 || p.pos.ordinal == posIdx - 1) &&
-                        p.age <= maxAge && shownOvr(w, p) >= minOvr
-                }.sortedByDescending { shownOvr(w, it) }.take(60)
+                        p.age <= maxAge
+                }.map { it to ovr(it) }.filter { it.second >= minOvr }.sortedByDescending { it.second }.take(60).map { it.first }
             }
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Panel(Modifier.width(200.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {

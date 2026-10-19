@@ -17,6 +17,7 @@ enum class Destination(val screen: String, val label: String, val primary: Boole
     TRANSFERS("Transfers", "Transfers", true),
     FINANCE("Finance", "Finance", false),
     BUSINESS("Business", "Business", false),
+    ECOSYSTEM("Ecosystem", "Ecosystem", false),
     CLUB("Club", "Club", true),
     DIAGNOSTICS("Diagnostics", "Diagnostics", false);
 

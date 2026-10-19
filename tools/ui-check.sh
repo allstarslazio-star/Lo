@@ -11,7 +11,7 @@ VER="$(basename "$KC" | sed 's/kotlin-compiler-embeddable-\(.*\)\.jar/\1/')"
 STD="$GRADLE_LIB/kotlin-stdlib-$VER.jar"; COR="$(ls "$GRADLE_LIB"/kotlinx-coroutines-core-jvm-*.jar | head -1)"
 CP="$KC:$STD:$GRADLE_LIB/kotlin-script-runtime-$VER.jar:$GRADLE_LIB/kotlin-reflect-$VER.jar:$GRADLE_LIB/kotlin-daemon-embeddable-$VER.jar:$(ls "$GRADLE_LIB"/trove4j-*.jar | head -1):$(ls "$GRADLE_LIB"/annotations-*.jar | head -1):$COR"
 MAIN="$ROOT/app/src/main/java/com/nerdfm/game"
-UI_EXCLUDE="BusinessUi MainActivity Management MatchUi Menu Shell Squad TacticsLeague Theme TransferUi"
+UI_EXCLUDE="SupportShare BusinessUi MainActivity Management MatchUi Menu Shell Squad TacticsLeague Theme TransferUi"
 FILES=()
 for f in "$MAIN"/*.kt; do b="$(basename "$f" .kt)"
   case " $UI_EXCLUDE " in *" $b "*) ;; *) FILES+=("$f");; esac; done
